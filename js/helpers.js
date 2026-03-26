@@ -16,3 +16,37 @@ function normalize(x, y) {
 
   return Vector;
 }
+
+// these will be massive help when we get to randomizing deflection angles
+function degToDir(degrees) {
+  const Direction = {
+    x: 0,
+    y: 0
+  }
+
+  var radians = degrees * Math.PI / 180; // turns degrees to radians
+
+  Direction.x = Math.cos(radians);
+  Direction.y = Math.sin(radians);
+
+  return Direction;
+}
+function radToDir(radians) {
+  const Direction = {
+    x: 0,
+    y: 0
+  }
+
+  Direction.x = Math.cos(radians);
+  Direction.y = Math.sin(radians);
+
+  return Direction;
+}
+function dirToDeg(vecX, vecY) {
+  var degrees = Math.atan2(vecY, vecX) * 180 / Math.PI;
+
+  return degrees;
+}
+function dirToRad(vecX, vecY) {
+  return Math.atan2(vecY, vecX);
+}

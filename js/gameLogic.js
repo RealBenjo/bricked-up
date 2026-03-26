@@ -9,8 +9,8 @@ const Ball = {
 
   // DO NOT FORGET TO NORMALIZE THE DIRECTION
   dirX: 1.0,
-  dirY: 2.0,
-  speed: 200,
+  dirY: 5.0,
+  speed: 500,
 
   // we calculate the velocity each frame based on direction and speed
   velX: 0.0,
