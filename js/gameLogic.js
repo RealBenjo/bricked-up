@@ -1,25 +1,39 @@
-// HTML elements
-/*const canvas = document.getElementById("canvas");
-const ctx = canvas.getContext("2d");*/
-
 const Viewport = {
   w: canvas.width,
-  h: canvas.height
+  h: canvas.height,
+  centerPos: new Vector2(canvas.width / 2, canvas.height / 2)
 }
 
-const ball = new Ball(new Vector2(150, 150), 0, new Vector2(1, 3), 2000, 10);
+const worldBorder = new WorldBorder(Viewport.centerPos, Viewport.w, Viewport.h, "black");
+const ball = new Ball(new Vector2(150, 450), 0, new Vector2(1, 3), 500, 10);
 const paddlePos = new Vector2(Viewport.w / 2, Viewport.h - 20);
-const paddle = new Paddle( paddlePos, 0, 300, 100, 15, "green");
-const brick1 = new Brick(new Vector2(200, 200), 0, 1, 100, 20, "grey");
-const brick2 = new Brick(new Vector2(450, 250), 45, 2, 100, 20, "grey");
+const paddle = new Paddle(paddlePos, 0, 100, 15, "green");
+/*
+// this is how to give an object a custom function
+// AFTER initialization and declaration
+brick2.process = function process(delta) {
+  this.rotation += 25 * delta;
+}
+*/
 
 // create a VERY important engine which runs the entire game!
 const ENGINE = new Engine("canvas",
-  [ball, paddle, brick1, brick2]
+  [worldBorder, ball, paddle]
 );
 
 
-
+init();
 function init() {
-  // something might come here one day
+  const brickHeight = 20;
+  var brickRows = 10;
+  var brickCols = 20;
+  
+  for (var x = 1; x <= brickRows; x++) {
+    for (var y = 1; y <= brickCols; y++) {
+      const brickPos = new Vector2(Viewport.w / brickRows * x, brickHeight * y);
+      ENGINE.nodes.push(new Brick(
+        brickPos, 0, Math.floor(Math.random() * 5 + 1), Viewport.w / brickRows, brickHeight
+      ));
+    }
+  }
 }

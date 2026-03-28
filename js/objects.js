@@ -1,3 +1,45 @@
+class Engine {
+  constructor(canvasId, nodes = []) {
+    this.canvas = document.getElementById(canvasId);
+    this.ctx = this.canvas.getContext("2d");
+    this.nodes = nodes;
+    this.lastTime = performance.now();
+    
+    requestAnimationFrame((t) => this._loop(t));
+  }
+
+  _loop(timestamp) {
+    const delta = (timestamp - this.lastTime) / 1000;
+    this.lastTime = timestamp;
+    const safeDelta = Math.min(delta, 0.1);
+
+    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+
+    // Logic Phase
+    this.nodes.forEach(node => {
+      if (node instanceof Ball) {
+        // this.nodes.filter parses only objects with the process function
+        node.process(safeDelta, Viewport, this.nodes.filter(n => n !== node));
+
+      } else if (node instanceof Paddle){
+        node.process(safeDelta, Viewport);
+
+      } else {
+        node.process(safeDelta);
+      }
+
+      // draw every node with a renderer
+      if (node.renderer) {
+        node.renderer.draw(this.ctx);
+      }
+    });
+
+    requestAnimationFrame((t) => this._loop(t));
+  }
+
+  add(node) { this.nodes.push(node); }
+}
+
 class Vector2 {
   constructor(x = 0, y = 0) {
     this.x = x;
@@ -30,6 +72,14 @@ class Vector2 {
   }
 }
 
+class BoxCollider {
+  constructor(width = 50, height = 50, inverted = false) {
+    this.width = width;
+    this.height = height;
+    this.inverted = inverted;
+  }
+}
+
 class HealthComponent {
   constructor(health = 100, onDeath) {
     this.health = health;
@@ -46,68 +96,32 @@ class HealthComponent {
 }
 
 class CanvasItem {
-  constructor(owner, color = "white", drawFunction) {
+  constructor(owner, drawFunction) {
     this.owner = owner;
-    this.color = color;
     this.visible = true;
     this.alpha = 1;
-    this.drawFunction = drawFunction; // The specific shape logic
+    this.color = "rgba(0,0,0,0)"; // Default color property
+    this.drawFunction = drawFunction;
   }
 
   draw(ctx) {
     if (!this.visible || this.alpha <= 0) return;
 
     ctx.save();
-    
-    // Use the owner's transform
     ctx.translate(this.owner.position.x, this.owner.position.y);
     ctx.rotate(this.owner.rotation * Math.PI / 180);
-    
-    ctx.fillStyle = this.color;
     ctx.globalAlpha = this.alpha;
 
-    // Run the specific drawing logic passed in during construction
+    // Apply the color to BOTH fill and stroke so the callback can choose
+    ctx.fillStyle = this.color;
+    ctx.strokeStyle = this.color;
+
     if (this.drawFunction) {
       this.drawFunction(ctx);
     }
 
     ctx.restore();
   }
-}
-
-class Engine {
-  constructor(canvasId, nodes = []) {
-    this.canvas = document.getElementById(canvasId);
-    this.ctx = this.canvas.getContext("2d");
-    this.nodes = nodes;
-    this.lastTime = performance.now();
-    requestAnimationFrame((t) => this._loop(t));
-  }
-
-  _loop(timestamp) {
-    const delta = (timestamp - this.lastTime) / 1000;
-    this.lastTime = timestamp;
-    const safeDelta = Math.min(delta, 0.1);
-
-    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-
-    // Logic Phase
-    this.nodes.forEach(node => {
-      // We pass delta, the viewport dimensions, and the whole list of nodes as potential obstacles
-      if (node instanceof Ball) {
-        node.process(safeDelta, Viewport, this.nodes.filter(n => n !== node));
-      } else {
-        node.process(safeDelta);
-      }
-      if (node.renderer) {
-        node.renderer.draw(this.ctx);
-      }
-    });
-
-    requestAnimationFrame((t) => this._loop(t));
-  }
-
-  add(node) { this.nodes.push(node); }
 }
 
 class Node {
@@ -140,6 +154,24 @@ class Node2D extends Node {
   }
 }
 
+class WorldBorder extends Node2D {
+  constructor(position = new Vector2(), width = 800, height = 600, color = "red") {
+    super(position, 0);
+    
+    this.collider = new BoxCollider(width, height, true);
+    this.renderer = new CanvasItem(this, (ctx) => {
+      ctx.beginPath();
+      ctx.lineWidth = 5;
+      ctx.rect(-width / 2, -height / 2, width, height);
+      ctx.stroke();
+      ctx.closePath();
+    });
+
+    // You can change it anytime!
+    this.renderer.color = color;
+  }
+}
+
 class Entity2D extends Node2D {
   constructor(position = new Vector2(), rotation = 0) {
     super(position, rotation);
@@ -152,14 +184,6 @@ class Entity2D extends Node2D {
   }
 }
 
-class BoxCollider extends Node2D {
-  constructor(position = new Vector2(), rotation = 0, width = 50, height = 50) {
-    super(position, rotation);
-    this.width = width;
-    this.height = height;
-  }
-}
-
 class Ball extends Node2D {
   constructor(position = new Vector2(), rotation = 0, startDirection = new Vector2(1, 0), speed = 0, diameter = 0) {
     super(position, rotation);
@@ -169,12 +193,13 @@ class Ball extends Node2D {
     this.velocity = new Vector2;
     this.diameter = diameter;
     
-    this.renderer = new CanvasItem(this, "blue", (ctx) => {
+    this.renderer = new CanvasItem(this, (ctx) => {
       ctx.beginPath();
       ctx.arc(0, 0, this.diameter, 0, Math.PI * 2);
       ctx.fill();
       ctx.closePath();
     });
+    this.renderer.color = "black";
   }
 
   process(delta, viewport, colliders = []) {
@@ -184,9 +209,12 @@ class Ball extends Node2D {
     this.direction.normalize();
     this.velocity = this.direction.clone().multiply(this.speed * delta);
 
-    // 2. Determine sub-steps (safe step is half the radius)
+    // Calculate the actual distance moving THIS FRAME
+    const distanceThisFrame = Math.sqrt(this.velocity.x ** 2 + this.velocity.y ** 2);
+
+    // 2. Determine sub-steps based on DISTANCE, not raw speed
     const stepSize = this.diameter / 2;
-    const steps = Math.ceil(this.speed / stepSize) || 1;
+    const steps = Math.ceil(distanceThisFrame / stepSize) || 1;
 
     // 3. Break velocity into tiny chunks
     const stepVelocity = this.velocity.clone().multiply(1 / steps);
@@ -196,12 +224,9 @@ class Ball extends Node2D {
       this.position.x += stepVelocity.x;
       this.position.y += stepVelocity.y;
 
-      // Check Screen Bounds
-      if (viewport) {
-        resolveScreenBounds(this, viewport.w, viewport.h);
-      }
-
-      // Check Object Collisions
+      // We remove resolveScreenBounds completely!
+      
+      // Check Object Collisions (including our new World Border)
       colliders.forEach(obj => {
         resolveBoxCollision(this, obj);
       });
@@ -210,44 +235,39 @@ class Ball extends Node2D {
 }
 
 class Paddle extends Node2D {
-  constructor(position = new Vector2(), rotation = 0, speed = 300, width = 100, height = 20, color = "black") {
+  constructor(position = new Vector2(), rotation = 0, width = 100, height = 20, color = "black") {
     super(position, rotation);
 
-    this.speed = speed;
     this.width = width;
     this.height = height;
 
-    this.rightDown = false;
-    this.leftDown = false;
+    this.targetX = position.x;
 
-    this.collider = new BoxCollider(position, rotation, this.width, this.height);
-    this.renderer = new CanvasItem(this, color, (ctx) => {
+    this.collider = new BoxCollider(this.width, this.height);
+    this.renderer = new CanvasItem(this, (ctx) => {
       ctx.beginPath();
       ctx.rect(-this.width / 2, -this.height / 2, this.width, this.height);
       ctx.fill();
       ctx.closePath();
     });
+    this.renderer.color = color;
 
-    // Handle Input
-    window.addEventListener("keydown", (e) => this._handleInput(e, true));
-    window.addEventListener("keyup", (e) => this._handleInput(e, false));
+    // Direct Mouse Listener
+    window.addEventListener("mousemove", (e) => this._updateMousePos(e));
   }
 
-  _handleInput(e, isPressed) {
-    if (e.key === "ArrowRight" || e.key === "d") this.rightDown = isPressed;
-    if (e.key === "ArrowLeft" || e.key === "a") this.leftDown = isPressed;
+  _updateMousePos(e) {
+    const rect = ENGINE.canvas.getBoundingClientRect();
+    this.targetX = e.clientX - rect.left;
   }
 
   process(delta, viewport) {
-    if (this.rightDown) {
-      this.position.x += this.speed * delta;
-    } else if (this.leftDown) {
-      this.position.x -= this.speed * delta;
-    }
+    this.position.x += this.targetX - this.position.x;
 
-    // TODO: make this work lol
     if (viewport) {
       const halfWidth = this.width / 2;
+      
+      // Math.min/max "clamping" logic
       if (this.position.x < halfWidth) {
         this.position.x = halfWidth;
       }
@@ -259,20 +279,21 @@ class Paddle extends Node2D {
 }
 
 class Brick extends Entity2D {
-  constructor(position = new Vector2(), rotation = 0, health = 1, width = 10, height = 10, color = "grey") {
+  constructor(position = new Vector2(), rotation = 0, health = 1, width = 10, height = 10) {
     position.x -= width/2;
     position.y -= height/2;
     super(position, rotation);
 
     this.width = width;
     this.height = height;
-    this.collider = new BoxCollider(position, rotation, this.width, this.height);
+    this.collider = new BoxCollider(this.width, this.height);
     this.healthComponent = new HealthComponent(health, () => this.die());
-    this.renderer = new CanvasItem(this, color, (ctx) => {
+    this.renderer = new CanvasItem(this, (ctx) => {
       ctx.beginPath();
       ctx.rect(-this.width / 2, -this.height / 2, this.width, this.height);
       ctx.fill();
       ctx.closePath();
     });
+    this.renderer.color = "rgb(" + Math.random()*256 + "," + Math.random()*256 + "," + Math.random()*256 + ")";
   }
 }
