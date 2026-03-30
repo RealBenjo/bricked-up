@@ -5,7 +5,7 @@ const Viewport = {
 }
 
 const worldBorder = new WorldBorder(Viewport.centerPos, Viewport.w, Viewport.h, "black");
-const ball = new Ball(new Vector2(150, 450), 0, new Vector2(1, 3), 500, 10);
+const ball = new Ball(new Vector2(150, 450), 0, new Vector2(1, 3), 2500, 10);
 const paddlePos = new Vector2(Viewport.w / 2, Viewport.h - 20);
 const paddle = new Paddle(paddlePos, 0, 100, 15, "green");
 /*
@@ -25,8 +25,8 @@ const ENGINE = new Engine("canvas",
 init();
 function init() {
   const brickHeight = 20;
-  var brickRows = 10;
-  var brickCols = 20;
+  var brickRows = 2;
+  var brickCols = 1;
   
   for (var x = 1; x <= brickRows; x++) {
     for (var y = 1; y <= brickCols; y++) {

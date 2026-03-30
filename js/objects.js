@@ -15,20 +15,22 @@ class Engine {
 
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
-    // Logic Phase
+    // 1. THE GRIM REAPER: Filter out anything that isDead
+    this.nodes = this.nodes.filter(node => !node.isDead);
+
+    // 2. Logic & Render Phase
     this.nodes.forEach(node => {
+      // Physics / Logic
       if (node instanceof Ball) {
-        // this.nodes.filter parses only objects with the process function
-        node.process(safeDelta, Viewport, this.nodes.filter(n => n !== node));
-
-      } else if (node instanceof Paddle){
+        // Pass everything EXCEPT the ball as colliders
+        node.process(safeDelta, this.nodes.filter(n => n !== node));
+      } else if (node instanceof Paddle) {
         node.process(safeDelta, Viewport);
-
-      } else {
+      } else if (node.process) {
         node.process(safeDelta);
       }
 
-      // draw every node with a renderer
+      // Rendering
       if (node.renderer) {
         node.renderer.draw(this.ctx);
       }
@@ -202,7 +204,7 @@ class Ball extends Node2D {
     this.renderer.color = "black";
   }
 
-  process(delta, viewport, colliders = []) {
+  process(delta, colliders = []) {
     if (this.speed <= 0) return;
 
     // 1. Calculate total movement intended for this frame

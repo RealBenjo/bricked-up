@@ -1,26 +1,3 @@
-// Collision Function: Handles screen edges
-function resolveScreenBounds(ballRef, viewportW, viewportH) {
-  const radius = ballRef.diameter; // Your diameter property acts as radius
-
-  // X-Axis bounds (Left and Right walls)
-  if (ballRef.position.x > viewportW - radius) {
-    ballRef.direction.x = -Math.abs(ballRef.direction.x);
-    ballRef.position.x = viewportW - radius; // Snap to edge
-  } else if (ballRef.position.x < radius) {
-    ballRef.direction.x = Math.abs(ballRef.direction.x);
-    ballRef.position.x = radius; // Snap to edge
-  }
-
-  // Y-Axis bounds (Top and Bottom walls)
-  if (ballRef.position.y > viewportH - radius) {
-    ballRef.direction.y = -Math.abs(ballRef.direction.y);
-    ballRef.position.y = viewportH - radius; // Snap to edge
-  } else if (ballRef.position.y < radius) {
-    ballRef.direction.y = Math.abs(ballRef.direction.y);
-    ballRef.position.y = radius; // Snap to edge
-  }
-}
-
 function resolveBoxCollision(ballRef, target) {
   if (!target.collider) return;
 
