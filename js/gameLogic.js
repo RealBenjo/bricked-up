@@ -8,6 +8,7 @@ const worldBorder = new WorldBorder(Viewport.centerPos, Viewport.w, Viewport.h, 
 const paddlePos = new Vector2(Viewport.w / 2, Viewport.h - 20);
 const paddle = new Paddle(paddlePos, 0, 100, 15, "green");
 const ball1 = new Ball(new Vector2(150, 450), 0, new Vector2(1, 3), 500, 20, paddle);
+const item = new Item(new Vector2(250, 450), "item", "images/items/default.png");
 //const ball2 = new Ball(new Vector2(250, 450), 0, new Vector2(1, 3), 500, 20, paddle);
 /*
 // this is how to give an object a custom function
@@ -18,9 +19,7 @@ brick2.process = function process(delta) {
 */
 
 // create a VERY important engine which runs the entire game!
-const ENGINE = new Engine("canvas",
-  [worldBorder, ball1,  paddle]
-);
+const ENGINE = new Engine("canvas", []);
 
 
 init();
@@ -33,9 +32,14 @@ function init() {
     for (var y = 1; y <= brickCols; y++) {
       const brickPos = new Vector2(Viewport.w / brickRows * x, brickHeight * y);
 
-      ENGINE.nodes.push(new Brick(
+      ENGINE.add(new Brick(
         brickPos, 0, Math.floor(Math.random() * 3 + 1), Viewport.w / brickRows, brickHeight
       ));
     }
   }
+
+  ENGINE.add(worldBorder);
+  ENGINE.add(ball1);
+  ENGINE.add(paddle);
+  ENGINE.add(item);
 }

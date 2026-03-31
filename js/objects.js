@@ -159,6 +159,11 @@ class Sprite2D {
 class Node {
   constructor() {
     this.isQueueFreed = false;
+    this.ready();
+  }
+
+  ready() {
+    // children run this code once and never again
   }
 
   process(delta) {
@@ -195,6 +200,19 @@ class Node2D extends Node {
     const currentRotationRad = this.rotation * Math.PI / 180;
 
     return targetAngle - currentRotationRad;
+  }
+}
+
+class Item extends Node2D {
+  constructor(position = new Vector2, itemName = "none", imagePath = "images/items/none.png", width = 30, height = 20) {
+    super(position, 0);
+    this.itemName = itemName;
+    
+    this.renderer = new Sprite2D(this, imagePath, width, height);
+  }
+
+  ready() {
+    console.log("item is ready");
   }
 }
 
