@@ -8,7 +8,7 @@ const worldBorder = new WorldBorder(Viewport.centerPos, Viewport.w, Viewport.h, 
 const paddlePos = new Vector2(Viewport.w / 2, Viewport.h - 20);
 const paddle = new Paddle(paddlePos, 0, 100, 15, "green");
 const ball1 = new Ball(new Vector2(150, 450), 0, new Vector2(1, 3), 500, 20, paddle);
-const item = new Item(new Vector2(250, 450), "item", "images/items/default.png");
+const item = new Item(new Vector2(250, 450), new Vector2(-2, -4), 200, "item", "images/items/default.png");
 //const ball2 = new Ball(new Vector2(250, 450), 0, new Vector2(1, 3), 500, 20, paddle);
 /*
 // this is how to give an object a custom function

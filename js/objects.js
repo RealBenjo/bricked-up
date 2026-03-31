@@ -69,6 +69,19 @@ class Vector2 {
     return this;
   }
 
+  multVector(vector = new Vector2) {
+    this.x *= vector.x;
+    this.y *= vector.y;
+
+    return this;
+  }
+  addVector(vector = new Vector2) {
+    this.x += vector.x;
+    this.y += vector.y;
+
+    return this;
+  }
+
   clone() {
     return new Vector2(this.x, this.y);
   }
@@ -203,16 +216,46 @@ class Node2D extends Node {
   }
 }
 
+class RigidBody2D {
+  constructor(owner) {
+    this.owner = owner;
+    this.gravity = 980; // Standard "game earth" gravity
+  }
+
+  process(delta) {
+    if (!this.owner.velocity) return;
+
+    // 1. Apply gravity to Y velocity
+    this.owner.velocity.y += this.gravity * delta;
+
+    // 2. Apply velocity to position (The actual movement!)
+    this.owner.velocity = new Vector2(0, 1).add(this.gravity * delta);
+  }
+}
+
 class Item extends Node2D {
-  constructor(position = new Vector2, itemName = "none", imagePath = "images/items/none.png", width = 30, height = 20) {
+  constructor(position = new Vector2(), startDirection = new Vector2, startSpeed = 0, itemName = "none", imagePath = "images/items/none.png", width = 30, height = 20) {
     super(position, 0);
     this.itemName = itemName;
     
+    this.startDirection = startDirection;
+    this.startSpeed = startSpeed;
+    this.velocity = new Vector2(0, 0);
+    
+    this.rigidBody = new RigidBody2D(this);
     this.renderer = new Sprite2D(this, imagePath, width, height);
   }
 
-  ready() {
-    console.log("item is ready");
+  process(delta) {
+    this.rigidBody.process(delta);
+
+    this.startDirection.normalize();
+
+    this.position.addVector(this.velocity);
+    
+    if (this.position.y > 1000) {
+      this.queueFree();
+    }
   }
 }
 
