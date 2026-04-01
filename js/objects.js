@@ -20,7 +20,14 @@ class Engine {
 
     this.nodes.forEach(node => {
       if (node instanceof Ball) {
-        node.process(safeDelta, this.nodes.filter(n => n !== node)); // input-> (n) => (n !== node) <- return
+        node.process(safeDelta, this.nodes.filter(n => 
+          n !== node && // filter self so it doesnt collide w/ itself
+          n.collider && // has a collider
+          !(n instanceof Item) // no items
+        ));
+
+      } else if (node instanceof Item) {
+        node.process(delta, [worldBorder]);
       } else if (node.process) {
         node.process(safeDelta, Viewport);
       }
@@ -230,24 +237,59 @@ class Node2D extends Node {
 }
 
 class Item extends Node2D {
-  constructor(position = new Vector2(), startDirection = new Vector2(), startSpeed = 0, itemName = "none", imagePath = "images/items/none.png", width = 30, height = 20) {
+  constructor(
+    position = new Vector2(), 
+    startDirection = new Vector2(), 
+    startSpeed = 0, 
+    itemName = "none", 
+    imagePath = "images/items/none.png", 
+    width = 30, 
+    height = 20,
+    paddleRef = new Paddle()) {
+
     super(position, 0);
     this.itemName = itemName;
     
     this.velocity = startDirection.clone().normalize().multiply(startSpeed);
     this.gravityCalc = new Gravity(this);
 
+    this.paddleRef = paddleRef;
+    this.collider = new BoxCollider(width, height);
     this.renderer = new Sprite2D(this, imagePath, width, height);
   }
 
-  process(delta) {
+  process(delta, boundaries = []) {
     this.gravityCalc.process(delta);
 
-    const frameMovement = this.velocity.clone().multiply(delta);
-    this.position.addVector(frameMovement);
-    
-    if (this.position.y > 1000) {
+    if (this.position.y > worldBorder.height - 100) {
       this.queueFree();
+    }
+
+    // 1. Calculate how far we move this frame
+    const distanceThisFrame = Math.sqrt(this.velocity.x ** 2 + this.velocity.y ** 2) * delta;
+    
+    // We can use the item's height for step size
+    const stepSize = this.collider.height / 2; 
+    const steps = Math.ceil(distanceThisFrame / stepSize) || 1;
+    
+    // The velocity slice for each mini-step
+    const stepVelocity = this.velocity.clone().multiply(delta / steps);
+
+    // 2. Step through movement
+    for (let i = 0; i < steps; i++) {
+      this.position.addVector(stepVelocity);
+      
+      // Bounce off walls
+      boundaries.forEach(wall => {
+        resolveBoxCollision(this, wall);
+      });
+      
+      // Check for paddle collection!
+      if (checkCollision(this, paddle)) {
+        console.log("collected item: " + this.itemName);
+        this.queueFree();
+        return; // it doesn't kill itself immediately, might as well return out of process now
+      }
     }
   }
 }
@@ -255,6 +297,8 @@ class Item extends Node2D {
 class WorldBorder extends Node2D {
   constructor(position = new Vector2(), width = 800, height = 600) {
     super(position, 0);
+    this.width = width;
+    this.height = height;
     
     this.collider = new BoxCollider(width, height, true);
   }
@@ -275,7 +319,7 @@ class Ball extends Node2D {
 
     this.direction = startDirection.normalize();
     this.speed = speed;
-    this.acceleration = 5;
+    this.acceleration = 2.5;
     this.velocity = new Vector2();
     this.diameter = diameter;
     this.paddleRef = paddleObj;
@@ -287,7 +331,7 @@ class Ball extends Node2D {
   }
 
   process(delta, colliders = []) {
-    if (this.position.y > this.paddleRef.position.y) {
+    if (this.position.y > worldBorder.height - 100) {
       this.queueFree();
     }
 
@@ -327,7 +371,7 @@ class Paddle extends Node2D {
     this.targetX = position.x;
 
     this.collider = new BoxCollider(this.width, this.height);
-    this.renderer = new CanvasItem(this, (ctx) => {
+    this.renderer = new CanvasItem(this, ctx => {
       ctx.beginPath();
       ctx.rect(-this.width / 2, -this.height / 2, this.width, this.height);
       ctx.fill();
@@ -380,20 +424,29 @@ class Brick extends Entity2D {
     });
   }
 
-  process(delta) {
+  process() {
     this.renderer.color = "rgb(0,0," + this.healthComponent.health*70 + ")";
   }
 
   die() {
-    engine.add(new Item(
+    if (Math.random() > this.itemChance) {
+      this.queueFree();
+      return
+    }
+
+    const item = new Item(
       this.position, 
       randomizeDir(new Vector2(0, -1), 90),
-      200, 
+      400, 
       "item",
       "images/items/default.png",
+      40,
       30,
-      10
-    ));
+      paddle
+    )
+    item.gravityCalc.gravity = 500;
+
+    engine.add(item);
     this.queueFree();
   }
 }

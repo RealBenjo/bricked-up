@@ -1,4 +1,4 @@
-function resolveBoxCollision(ballRef, target) {
+function resolveBoxCollision(mover, target) {
   if (!target.collider) return false;
 
   const collider = target.collider;
@@ -6,9 +6,9 @@ function resolveBoxCollision(ballRef, target) {
   const cos = Math.cos(theta);
   const sin = Math.sin(theta);
 
-  // Un-rotate ball position into the target's local space
-  const dx = ballRef.position.x - target.position.x;
-  const dy = ballRef.position.y - target.position.y;
+  // Un-rotate mover position into the target's local space
+  const dx = mover.position.x - target.position.x;
+  const dy = mover.position.y - target.position.y;
 
   let localX = dx * cos + dy * sin;
   let localY = -dx * sin + dy * cos;
@@ -16,11 +16,19 @@ function resolveBoxCollision(ballRef, target) {
   const halfW = collider.width / 2;
   const halfH = collider.height / 2;
   
-  // FIX: Radius is half the diameter!
-  const radius = ballRef.diameter / 2; 
+  // ==========================================
+  // GENERALIZATION: Determine the Radius
+  // ==========================================
+  let radius = 0;
+  if (mover.diameter !== undefined) {
+    radius = mover.diameter / 2; // It's a Ball
+  } else if (mover.collider) {
+    // It's an Item (Box). Approximate its size as a circle for smooth bouncing.
+    radius = Math.max(mover.collider.width, mover.collider.height) / 2;
+  }
 
   // ====================
-  //  INVERTED COLLISION
+  //  INVERTED COLLISION (WORLD BOUNDARIES)
   // ====================
   if (collider.inverted) {
     let bounced = false;
@@ -40,25 +48,32 @@ function resolveBoxCollision(ballRef, target) {
     }
 
     if (bounced) {
-      ballRef.position.x = target.position.x + (localX * cos - localY * sin);
-      ballRef.position.y = target.position.y + (localX * sin + localY * cos);
+      mover.position.x = target.position.x + (localX * cos - localY * sin);
+      mover.position.y = target.position.y + (localX * sin + localY * cos);
 
       const globalNormalX = localNormalX * cos - localNormalY * sin;
       const globalNormalY = localNormalX * sin + localNormalY * cos;
 
-      const dot = (ballRef.direction.x * globalNormalX) + (ballRef.direction.y * globalNormalY);
+      // GENERALIZATION: Bounce the Velocity, not just Direction
+      const dot = (mover.velocity.x * globalNormalX) + (mover.velocity.y * globalNormalY);
       if (dot < 0) {
-        ballRef.direction.x -= 2 * dot * globalNormalX;
-        ballRef.direction.y -= 2 * dot * globalNormalY;
-        ballRef.direction.normalize();
+        mover.velocity.x -= 2 * dot * globalNormalX;
+        mover.velocity.y -= 2 * dot * globalNormalY;
+        
+        // Sync the Ball's direction vector if it has one
+        if (mover.direction) {
+          mover.direction.x = mover.velocity.x;
+          mover.direction.y = mover.velocity.y;
+          mover.direction.normalize();
+        }
       }
-      return true; // We collided and resolved
+      return true; 
     }
-    return false; // No collision
+    return false;
   }
 
   // ==========================================
-  // STANDARD COLLISION
+  // STANDARD COLLISION (PADDLE / BRICKS)
   // ==========================================
   const closestX = Math.max(-halfW, Math.min(localX, halfW));
   const closestY = Math.max(-halfH, Math.min(localY, halfH));
@@ -67,7 +82,7 @@ function resolveBoxCollision(ballRef, target) {
   const diffY = localY - closestY;
   const distanceSq = (diffX * diffX) + (diffY * diffY);
 
-  if (distanceSq < radius * radius) {
+  if (distanceSq <= radius * radius) {
     const distance = Math.sqrt(distanceSq) || 0.0001;
     const penetration = radius - distance;
 
@@ -77,27 +92,32 @@ function resolveBoxCollision(ballRef, target) {
     const globalNormalX = localNormalX * cos - localNormalY * sin;
     const globalNormalY = localNormalX * sin + localNormalY * cos;
 
-    ballRef.position.x += globalNormalX * penetration;
-    ballRef.position.y += globalNormalY * penetration;
+    mover.position.x += globalNormalX * penetration;
+    mover.position.y += globalNormalY * penetration;
 
-    const dot = (ballRef.direction.x * globalNormalX) + (ballRef.direction.y * globalNormalY);
+    const dot = (mover.velocity.x * globalNormalX) + (mover.velocity.y * globalNormalY);
 
     if (dot < 0) {
-      ballRef.direction.x -= 2 * dot * globalNormalX;
-      ballRef.direction.y -= 2 * dot * globalNormalY;
-      ballRef.direction.normalize();
+      mover.velocity.x -= 2 * dot * globalNormalX;
+      mover.velocity.y -= 2 * dot * globalNormalY;
+      
+      if (mover.direction) {
+        mover.direction.x = mover.velocity.x;
+        mover.direction.y = mover.velocity.y;
+        mover.direction.normalize();
+      }
 
-      if (target.healthComponent) {
+      if (mover instanceof Ball && target.healthComponent) {
         target.healthComponent.takeDamage(1);
       }
     }
-    return true; // We collided and resolved
+    return true; 
   }
   
-  return false; // No collision
+  return false; 
 }
 
-function checkCollision(ballRef = new Ball, target = new Node2D) {
+function checkCollision(mover, target) {
   if (!target.collider) return false;
 
   const collider = target.collider;
@@ -105,9 +125,8 @@ function checkCollision(ballRef = new Ball, target = new Node2D) {
   const cos = Math.cos(theta);
   const sin = Math.sin(theta);
 
-  // Un-rotate ball position into the target's local space
-  const dx = ballRef.position.x - target.position.x;
-  const dy = ballRef.position.y - target.position.y;
+  const dx = mover.position.x - target.position.x;
+  const dy = mover.position.y - target.position.y;
 
   const localX = dx * cos + dy * sin;
   const localY = -dx * sin + dy * cos;
@@ -115,12 +134,13 @@ function checkCollision(ballRef = new Ball, target = new Node2D) {
   const halfW = collider.width / 2;
   const halfH = collider.height / 2;
   
-  // FIX: Radius is half the diameter!
-  const radius = ballRef.diameter / 2; 
+  let radius = 0;
+  if (mover.diameter !== undefined) {
+    radius = mover.diameter / 2;
+  } else if (mover.collider) {
+    radius = Math.max(mover.collider.width, mover.collider.height) / 2;
+  }
 
-  // ====================
-  //  INVERTED COLLISION
-  // ====================
   if (collider.inverted) {
     return (
       localX > halfW - radius ||
@@ -130,9 +150,6 @@ function checkCollision(ballRef = new Ball, target = new Node2D) {
     );
   }
 
-  // ==========================================
-  // STANDARD COLLISION
-  // ==========================================
   const closestX = Math.max(-halfW, Math.min(localX, halfW));
   const closestY = Math.max(-halfH, Math.min(localY, halfH));
 
@@ -140,7 +157,7 @@ function checkCollision(ballRef = new Ball, target = new Node2D) {
   const diffY = localY - closestY;
   const distanceSq = (diffX * diffX) + (diffY * diffY);
 
-  return distanceSq < (radius * radius);
+  return distanceSq <= (radius * radius);
 }
 
 // these will be massive help when we get to redirecting deflection angles

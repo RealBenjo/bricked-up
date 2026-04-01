@@ -4,12 +4,19 @@ const Viewport = {
   centerPos: new Vector2(canvas.width / 2, canvas.height / 2)
 }
 
-const worldBorder = new WorldBorder(Viewport.centerPos, Viewport.w, Viewport.h, "black");
-const paddlePos = new Vector2(Viewport.w / 2, Viewport.h - 20);
-const paddle = new Paddle(paddlePos, 0, 100, 15, "green");
-const ball1 = new Ball(new Vector2(150, 450), 0, new Vector2(1, 3), 500, 20, paddle);
-const item = new Item(new Vector2(250, 450), new Vector2(-2, -4), 200, "item", "images/items/default.png");
-//const ball2 = new Ball(new Vector2(250, 450), 0, new Vector2(1, 3), 500, 20, paddle);
+// Calculate the new dimensions
+const borderHeight = Viewport.h + 200;
+const borderCenterY = borderHeight / 2;
+
+// Create the position vector
+const borderPos = new Vector2(Viewport.w / 2, borderCenterY);
+
+// Initialize the border
+const worldBorder = new WorldBorder(borderPos, Viewport.w, borderHeight);
+const paddle = new Paddle(
+  new Vector2(Viewport.w / 2, Viewport.h - 20), 
+  0, 100, 15, "green");
+const ball = new Ball(new Vector2(150, 450), 0, new Vector2(1, 3), 500, 20, paddle);
 /*
 // this is how to give an object a custom function
 // AFTER initialization and declaration
@@ -33,13 +40,12 @@ function init() {
       const brickPos = new Vector2(Viewport.w / brickRows * x, brickHeight * y);
 
       engine.add(new Brick(
-        brickPos, 0, Math.floor(Math.random() * 1 + 1), Viewport.w / brickRows, brickHeight
+        brickPos, 0, Math.floor(Math.random() * 2 + 1), Viewport.w / brickRows, brickHeight
       ));
     }
   }
-
+  
   engine.add(worldBorder);
-  engine.add(ball1);
+  engine.add(ball);
   engine.add(paddle);
-  engine.add(item);
 }
