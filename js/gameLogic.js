@@ -19,7 +19,7 @@ brick2.process = function process(delta) {
 */
 
 // create a VERY important engine which runs the entire game!
-const ENGINE = new Engine("canvas", []);
+const engine = new Engine("canvas", []);
 
 
 init();
@@ -32,14 +32,14 @@ function init() {
     for (var y = 1; y <= brickCols; y++) {
       const brickPos = new Vector2(Viewport.w / brickRows * x, brickHeight * y);
 
-      ENGINE.add(new Brick(
-        brickPos, 0, Math.floor(Math.random() * 3 + 1), Viewport.w / brickRows, brickHeight
+      engine.add(new Brick(
+        brickPos, 0, Math.floor(Math.random() * 1 + 1), Viewport.w / brickRows, brickHeight
       ));
     }
   }
 
-  ENGINE.add(worldBorder);
-  ENGINE.add(ball1);
-  ENGINE.add(paddle);
-  ENGINE.add(item);
+  engine.add(worldBorder);
+  engine.add(ball1);
+  engine.add(paddle);
+  engine.add(item);
 }

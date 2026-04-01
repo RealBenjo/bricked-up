@@ -188,6 +188,19 @@ class Node {
   }
 }
 
+class Gravity {
+  constructor(owner, gravityStrength = 980) {
+    this.owner = owner;
+    this.gravity = gravityStrength; 
+  }
+
+  process(delta) {
+    if (!this.owner.velocity) return;
+
+    this.owner.velocity.y += this.gravity * delta;
+  }
+}
+
 class Node2D extends Node {
   constructor(position = new Vector2(0, 0), rotation = 0) {
     super();
@@ -216,42 +229,22 @@ class Node2D extends Node {
   }
 }
 
-class RigidBody2D {
-  constructor(owner) {
-    this.owner = owner;
-    this.gravity = 980; // Standard "game earth" gravity
-  }
-
-  process(delta) {
-    if (!this.owner.velocity) return;
-
-    // 1. Apply gravity to Y velocity
-    this.owner.velocity.y += this.gravity * delta;
-
-    // 2. Apply velocity to position (The actual movement!)
-    this.owner.velocity = new Vector2(0, 1).add(this.gravity * delta);
-  }
-}
-
 class Item extends Node2D {
-  constructor(position = new Vector2(), startDirection = new Vector2, startSpeed = 0, itemName = "none", imagePath = "images/items/none.png", width = 30, height = 20) {
+  constructor(position = new Vector2(), startDirection = new Vector2(), startSpeed = 0, itemName = "none", imagePath = "images/items/none.png", width = 30, height = 20) {
     super(position, 0);
     this.itemName = itemName;
     
-    this.startDirection = startDirection;
-    this.startSpeed = startSpeed;
-    this.velocity = new Vector2(0, 0);
-    
-    this.rigidBody = new RigidBody2D(this);
+    this.velocity = startDirection.clone().normalize().multiply(startSpeed);
+    this.gravityCalc = new Gravity(this);
+
     this.renderer = new Sprite2D(this, imagePath, width, height);
   }
 
   process(delta) {
-    this.rigidBody.process(delta);
+    this.gravityCalc.process(delta);
 
-    this.startDirection.normalize();
-
-    this.position.addVector(this.velocity);
+    const frameMovement = this.velocity.clone().multiply(delta);
+    this.position.addVector(frameMovement);
     
     if (this.position.y > 1000) {
       this.queueFree();
@@ -311,15 +304,13 @@ class Ball extends Node2D {
     const stepVelocity = this.velocity.clone().multiply(1 / steps);
 
     for (let i = 0; i < steps; i++) {
-      this.position.x += stepVelocity.x;
-      this.position.y += stepVelocity.y;
+      this.position.addVector(stepVelocity);
       
       colliders.forEach(collider => {
       const didHit = resolveBoxCollision(this, collider);
       
       if (didHit && collider === this.paddleRef) {
         this.direction = radToDir(this.getAngleTo(this.paddleRef.position)).multiply(-1);
-        
       }
     });
     }
@@ -349,7 +340,7 @@ class Paddle extends Node2D {
   }
 
   _updateMousePos(e) {
-    const rect = ENGINE.canvas.getBoundingClientRect();
+    const rect = engine.canvas.getBoundingClientRect();
     this.targetX = e.clientX - rect.left;
   }
 
@@ -378,8 +369,9 @@ class Brick extends Entity2D {
 
     this.width = width;
     this.height = height;
+    this.itemChance = 0.10; // chance to spawn an item pickup
     this.collider = new BoxCollider(this.width, this.height);
-    this.healthComponent = new HealthComponent(health, () => this.queueFree());
+    this.healthComponent = new HealthComponent(health, () => this.die());
     this.renderer = new CanvasItem(this, (ctx) => {
       ctx.beginPath();
       ctx.rect(-this.width / 2, -this.height / 2, this.width, this.height);
@@ -387,7 +379,21 @@ class Brick extends Entity2D {
       ctx.closePath();
     });
   }
+
   process(delta) {
     this.renderer.color = "rgb(0,0," + this.healthComponent.health*70 + ")";
+  }
+
+  die() {
+    engine.add(new Item(
+      this.position, 
+      randomizeDir(new Vector2(0, -1), 90),
+      200, 
+      "item",
+      "images/items/default.png",
+      30,
+      10
+    ));
+    this.queueFree();
   }
 }
