@@ -40,7 +40,7 @@ function init() {
       const brickPos = new Vector2(Viewport.w / brickRows * x, brickHeight * y);
 
       engine.add(new Brick(
-        brickPos, 0, Math.floor(Math.random() * 1 + 1), Viewport.w / brickRows, brickHeight
+        brickPos, 0, Math.floor(Math.random() * 2 + 1), Viewport.w / brickRows, brickHeight
       ));
     }
   }

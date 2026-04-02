@@ -214,7 +214,12 @@ class Node2D extends Node {
     this.position = position;
     this._rotation = 0; // internal private variable
     this.rotation = rotation; 
+    
+    // Track the parent node so our global position math works seamlessly
+    this.parent = null; 
   }
+
+  // --- ROTATION GETTERS & SETTERS ---
 
   set rotation(value) {
     // standard math for degrees (0 to 360)
@@ -225,6 +230,30 @@ class Node2D extends Node {
     return this._rotation;
   }
 
+  // --- GLOBAL POSITION GETTERS & SETTERS ---
+
+  get globalPosition() {
+    // If this node is attached to a parent, its global position is relative to that parent
+    if (this.parent) {
+      return this.parent.toGlobal(this.position);
+    }
+    
+    // If it has no parent, its local position IS its global position!
+    return this.position.clone();
+  }
+
+  set globalPosition(newGlobalPos) {
+    if (this.parent) {
+      // If we have a parent, figure out our LOCAL position relative to it
+      this.position = this.parent.toLocal(newGlobalPos);
+    } else {
+      // No parent? Set the local position directly
+      this.position = newGlobalPos.clone();
+    }
+  }
+
+  // --- MATH & COORDINATE CONVERSION ---
+
   getAngleTo(point) {
     const deltaX = point.x - this.position.x;
     const deltaY = point.y - this.position.y;
@@ -234,13 +263,47 @@ class Node2D extends Node {
 
     return targetAngle - currentRotationRad;
   }
+
+  toLocal(globalPoint) {
+    // 1. Translate: Find the offset from this node's origin
+    const dx = globalPoint.x - this.position.x;
+    const dy = globalPoint.y - this.position.y;
+
+    // 2. Rotate: Spin it BACKWARDS by this node's rotation
+    const rad = -this.rotation * Math.PI / 180;
+    const cos = Math.cos(rad);
+    const sin = Math.sin(rad);
+
+    // Apply rotation math
+    const localX = dx * cos - dy * sin;
+    const localY = dx * sin + dy * cos;
+
+    return new Vector2(localX, localY);
+  }
+
+  toGlobal(localPoint) {
+    // 1. Rotate: Spin the local point by this node's rotation
+    const rad = this.rotation * Math.PI / 180;
+    const cos = Math.cos(rad);
+    const sin = Math.sin(rad);
+
+    // Apply rotation math
+    const rotatedX = localPoint.x * cos - localPoint.y * sin;
+    const rotatedY = localPoint.x * sin + localPoint.y * cos;
+
+    // 2. Translate: Add the node's actual world position
+    const globalX = rotatedX + this.position.x;
+    const globalY = rotatedY + this.position.y;
+
+    return new Vector2(globalX, globalY);
+  }
 }
 
 class Item extends Node2D {
   // STATIC means this belongs to the class itself, not the instance.
   // We use objects {} instead of arrays [] so we can look them up by string name.
   static UPGRADES = {
-    P_SPEED: { type: "speed", value: 100 },
+    P_SPEED: { type: "speed", value: 100, sprite: "images/items/debuffs/plus_speed.png"},
     M_SPEED: { type: "speed", value: -100 },
     P_WIDTH: { type: "width", value: 50 },
     M_WIDTH: { type: "width", value: -50 },
@@ -254,7 +317,7 @@ class Item extends Node2D {
     position = new Vector2(), 
     startDirection = new Vector2(), 
     startSpeed = 0, 
-    itemUpgradeKey = "NONE", // Pass the string key here (e.g., "P_SPEED")
+    itemUpgradeKey = "NONE", 
     imagePath = "images/items/none.png", 
     width = 30, 
     height = 20,
@@ -264,7 +327,8 @@ class Item extends Node2D {
     super(position, 0);
 
     // Grab the specific upgrade data based on the string passed in
-    this.upgradeData = Item.UPGRADES[itemUpgradeKey] || Item.UPGRADES.NONE;
+    //this.upgradeData = Item.UPGRADES[itemUpgradeKey] || Item.UPGRADES.NONE;
+    this.upgradeData = Item.UPGRADES["P_WIDTH"];
 
     this.paddleRef = paddleRef;
     this.engineRef = engineRef;
@@ -314,6 +378,7 @@ class Item extends Node2D {
         break;
       case "width":
         this.paddleRef.width += data.value;
+        this.paddleRef.collider.width += data.value;
         // You might also need to update the paddle's collider/renderer here!
         break;
       case "fireball":
@@ -387,12 +452,29 @@ class Ball extends Node2D {
       this.position.addVector(stepVelocity);
       
       colliders.forEach(collider => {
-      const didHit = resolveBoxCollision(this, collider);
-      
-      if (didHit && collider === this.paddleRef) {
-        this.direction = radToDir(this.getAngleTo(this.paddleRef.position)).multiply(-1);
-      }
-    });
+        const didHit = resolveBoxCollision(this, collider);
+        
+        if (didHit && collider === this.paddleRef) {
+          // 1. Find how far from the paddle's center the ball hit
+          // (This assumes paddleRef.position.x is the exact CENTER of your paddle)
+          const hitDistance = this.position.x - this.paddleRef.position.x;
+          
+          // 2. Convert that to a percentage ranging from -1.0 to 1.0
+          // (Assuming your paddle has a 'width' property)
+          const maxDist = this.paddleRef.width / 2; 
+          const normalizedHit = Math.max(-1, Math.min(1, hitDistance / maxDist));
+
+          // 3. Map that percentage to an angle. 
+          // x = -1 (left edge)   -> -180 degrees (Left)
+          // x =  0 (center)      -> -90 degrees  (Straight Up)
+          // x =  1 (right edge)  -> 0 degrees    (Right)
+          const angle = 80;
+          const bounceAngle = -90 + (normalizedHit * angle);
+
+          // 4. Apply the new direction using your helper function
+          this.direction = degToDir(bounceAngle);
+        }
+      });
     }
   }
 }
@@ -449,7 +531,7 @@ class Brick extends Entity2D {
 
     this.width = width;
     this.height = height;
-    this.itemChance = 0.10; // chance to spawn an item pickup
+    this.itemChance = 1.0; // 0.0 - 1.0
     this.collider = new BoxCollider(this.width, this.height);
     this.healthComponent = new HealthComponent(health, () => this.die());
     this.renderer = new CanvasItem(this, (ctx) => {
