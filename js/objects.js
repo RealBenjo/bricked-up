@@ -303,22 +303,21 @@ class Item extends Node2D {
   // STATIC means this belongs to the class itself, not the instance.
   // We use objects {} instead of arrays [] so we can look them up by string name.
   static UPGRADES = {
-    P_SPEED: { type: "speed", value: 100, sprite: "images/items/debuffs/plus_speed.png"},
-    M_SPEED: { type: "speed", value: -100 },
-    P_WIDTH: { type: "width", value: 50 },
-    M_WIDTH: { type: "width", value: -50 },
+    P_SPEED: { type: "speed", value: 100, imgPath: "images/items/debuffs/plus_speed.png"},
+    M_SPEED: { type: "speed", value: -100, imgPath: "images/items/buffs/minus_speed.png" },
+    P_WIDTH: { type: "width", value: 50, imgPath: "images/items/buffs/plus_size.png" },
+    M_WIDTH: { type: "width", value: -50, imgPath: "images/items/debuffs/minus_size.png" }/*,
     P_FIREBALL: { type: "fireball", value: true },
     M_FIREBALL: { type: "fireball", value: false },
     P_BALL: { type: "multiball", value: null },
-    NONE: { type: "none", value: null }
+    NONE: { type: "none", value: null }*/
   };
 
   constructor(
     position = new Vector2(), 
     startDirection = new Vector2(), 
     startSpeed = 0, 
-    itemUpgradeKey = "NONE", 
-    imagePath = "images/items/none.png", 
+    itemUpgradeKey = "NONE",
     width = 30, 
     height = 20,
     paddleRef = new Paddle(),
@@ -327,8 +326,7 @@ class Item extends Node2D {
     super(position, 0);
 
     // Grab the specific upgrade data based on the string passed in
-    //this.upgradeData = Item.UPGRADES[itemUpgradeKey] || Item.UPGRADES.NONE;
-    this.upgradeData = Item.UPGRADES["P_WIDTH"];
+    this.upgradeData = Item.UPGRADES[itemUpgradeKey] || Item.UPGRADES.NONE;
 
     this.paddleRef = paddleRef;
     this.engineRef = engineRef;
@@ -337,7 +335,7 @@ class Item extends Node2D {
     this.gravityCalc = new Gravity(this);
 
     this.collider = new BoxCollider(width, height);
-    this.renderer = new Sprite2D(this, imagePath, width, height);
+    this.renderer = new Sprite2D(this, this.upgradeData.imgPath, width, height);
   }
 
   process(delta, boundaries = []) {
@@ -379,7 +377,6 @@ class Item extends Node2D {
       case "width":
         this.paddleRef.width += data.value;
         this.paddleRef.collider.width += data.value;
-        // You might also need to update the paddle's collider/renderer here!
         break;
       case "fireball":
         this.paddleRef.isFireball = data.value;
@@ -564,7 +561,6 @@ class Brick extends Entity2D {
       randomizeDir(new Vector2(0, -1), 90),
       400, 
       randomKey, // Pass the chosen string (e.g., "P_WIDTH")
-      "images/items/default.png",
       40,
       30,
       paddle,
