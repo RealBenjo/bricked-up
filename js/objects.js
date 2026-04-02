@@ -237,23 +237,41 @@ class Node2D extends Node {
 }
 
 class Item extends Node2D {
+  // STATIC means this belongs to the class itself, not the instance.
+  // We use objects {} instead of arrays [] so we can look them up by string name.
+  static UPGRADES = {
+    P_SPEED: { type: "speed", value: 100 },
+    M_SPEED: { type: "speed", value: -100 },
+    P_WIDTH: { type: "width", value: 50 },
+    M_WIDTH: { type: "width", value: -50 },
+    P_FIREBALL: { type: "fireball", value: true },
+    M_FIREBALL: { type: "fireball", value: false },
+    P_BALL: { type: "multiball", value: null },
+    NONE: { type: "none", value: null }
+  };
+
   constructor(
     position = new Vector2(), 
     startDirection = new Vector2(), 
     startSpeed = 0, 
-    itemName = "none", 
+    itemUpgradeKey = "NONE", // Pass the string key here (e.g., "P_SPEED")
     imagePath = "images/items/none.png", 
     width = 30, 
     height = 20,
-    paddleRef = new Paddle()) {
-
+    paddleRef = new Paddle(),
+    engineRef = new Engine()
+  ) {
     super(position, 0);
-    this.itemName = itemName;
+
+    // Grab the specific upgrade data based on the string passed in
+    this.upgradeData = Item.UPGRADES[itemUpgradeKey] || Item.UPGRADES.NONE;
+
+    this.paddleRef = paddleRef;
+    this.engineRef = engineRef;
     
     this.velocity = startDirection.clone().normalize().multiply(startSpeed);
     this.gravityCalc = new Gravity(this);
 
-    this.paddleRef = paddleRef;
     this.collider = new BoxCollider(width, height);
     this.renderer = new Sprite2D(this, imagePath, width, height);
   }
@@ -265,31 +283,49 @@ class Item extends Node2D {
       this.queueFree();
     }
 
-    // 1. Calculate how far we move this frame
     const distanceThisFrame = Math.sqrt(this.velocity.x ** 2 + this.velocity.y ** 2) * delta;
-    
-    // We can use the item's height for step size
     const stepSize = this.collider.height / 2; 
     const steps = Math.ceil(distanceThisFrame / stepSize) || 1;
-    
-    // The velocity slice for each mini-step
     const stepVelocity = this.velocity.clone().multiply(delta / steps);
 
-    // 2. Step through movement
     for (let i = 0; i < steps; i++) {
       this.position.addVector(stepVelocity);
       
-      // Bounce off walls
       boundaries.forEach(wall => {
         resolveBoxCollision(this, wall);
       });
       
       // Check for paddle collection!
-      if (checkCollision(this, paddle)) {
-        console.log("collected item: " + this.itemName);
+      if (checkCollision(this, this.paddleRef)) {
+        this.applyUpgrade(); // Handle the logic in a separate clean function
         this.queueFree();
-        return; // it doesn't kill itself immediately, might as well return out of process now
+        return; 
       }
+    }
+  }
+
+  // This routes the upgrade data to the actual game logic
+  applyUpgrade() {
+    const data = this.upgradeData;
+    
+    switch (data.type) {
+      case "speed":
+        this.paddleRef.speed += data.value;
+        break;
+      case "width":
+        this.paddleRef.width += data.value;
+        // You might also need to update the paddle's collider/renderer here!
+        break;
+      case "fireball":
+        this.paddleRef.isFireball = data.value;
+        break;
+      case "multiball":
+        // e.g., this.engineRef.add(new Ball(...))
+        break;
+      case "none":
+      default:
+        // Do nothing
+        break;
     }
   }
 }
@@ -379,7 +415,7 @@ class Paddle extends Node2D {
     });
     this.renderer.color = color;
 
-    // Direct Mouse Listener
+    // mouse listener :D
     window.addEventListener("mousemove", (e) => this._updateMousePos(e));
   }
 
@@ -431,19 +467,28 @@ class Brick extends Entity2D {
   die() {
     if (Math.random() > this.itemChance) {
       this.queueFree();
-      return
+      return;
     }
 
+    // 1. Get an array of all the upgrade names (keys)
+    // We filter out "NONE" so it doesn't randomly spawn a useless item
+    const upgradeKeys = Object.keys(Item.UPGRADES).filter(key => key !== "NONE");
+    
+    // 2. Pick a random key from that array
+    const randomKey = upgradeKeys[Math.floor(Math.random() * upgradeKeys.length)];
+
     const item = new Item(
-      this.position, 
+      this.position.clone(), // Always clone vectors so you don't link positions!
       randomizeDir(new Vector2(0, -1), 90),
       400, 
-      "item",
+      randomKey, // Pass the chosen string (e.g., "P_WIDTH")
       "images/items/default.png",
       40,
       30,
-      paddle
-    )
+      paddle,
+      engine
+    );
+    
     item.gravityCalc.gravity = 500;
 
     engine.add(item);
