@@ -24,7 +24,9 @@ Globals.paddle = new Paddle(
 );
 
 // Ball goes in AFTER the paddle, so the paddle is ready to be referenced!
-Globals.ball = new Ball(new Vector2(150, 450), 0, new Vector2(1, 3), 500, 20);
+Globals.balls = [
+  new Ball(new Vector2(150, 450), 0, new Vector2(1, 3), 500, 20)
+];
 
 init();
 function init() {
@@ -37,7 +39,7 @@ function init() {
       const brickPos = new Vector2(Viewport.w / brickRows * x, brickHeight * y);
 
       Globals.engine.add(new Brick(
-        brickPos, 0, Math.floor(Math.random() * 2 + 1), Viewport.w / brickRows, brickHeight
+        brickPos, 0, Math.floor(Math.random() * 1 + 1), Viewport.w / brickRows, brickHeight
       ));
     }
   }
@@ -45,5 +47,5 @@ function init() {
   // Now add them to the engine
   Globals.engine.add(Globals.worldBorder);
   Globals.engine.add(Globals.paddle);
-  Globals.engine.add(Globals.ball);
+  Globals.engine.add(Globals.balls[0]); // add the first and only ball at start
 }

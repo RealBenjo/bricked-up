@@ -17,17 +17,20 @@ class Engine {
 
     // filter out anything that isQueueFreed (aka removed from memory)
     this.nodes = this.nodes.filter(node => !node.isQueueFreed);
+    // do the same thing but for the Global balls
+    Globals.balls = Globals.balls.filter(node => !node.isQueueFreed);
 
     this.nodes.forEach(node => {
       if (node instanceof Ball) {
         node.process(safeDelta, this.nodes.filter(n => 
           n !== node && // filter self so it doesnt collide w/ itself
           n.collider && // has a collider
-          !(n instanceof Item) // no items
+          !(n instanceof Item) && // no items
+          !(n instanceof Ball) // no balls (might be unnecesary but better safe than sorry amirite)
         ));
 
       } else if (node.process) {
-        node.process(safeDelta, Viewport);
+        node.process(safeDelta);
       }
 
       if (node.renderer && typeof node.renderer.draw === "function") {
@@ -38,7 +41,9 @@ class Engine {
     requestAnimationFrame((t) => this._loop(t));
   }
 
-  add(node) { this.nodes.push(node); }
+  add(node) {
+    this.nodes.push(node);
+  }
 }
 
 class Vector2 {
@@ -61,30 +66,22 @@ class Vector2 {
     return this;
   }
 
-  multiply(multiplier = 1) {
-    this.x *= multiplier;
-    this.y *= multiplier;
+  // --- POLYMORPHIC IMMUTABLE MATH ---
 
-    return this; // for chaining: vector.normalize().multiply(100) ...
-  }
-  add(adder = 1) {
-    this.x += adder;
-    this.y += adder;
-
-    return this;
+  add(value = 0) {
+    // Check if the value is another Vector2
+    if (value instanceof Vector2) {
+      return new Vector2(this.x + value.x, this.y + value.y);
+    } 
+    // Otherwise, assume it's a standard number
+    return new Vector2(this.x + value, this.y + value);
   }
 
-  multVector(vector = new Vector2) {
-    this.x *= vector.x;
-    this.y *= vector.y;
-
-    return this;
-  }
-  addVector(vector = new Vector2) {
-    this.x += vector.x;
-    this.y += vector.y;
-
-    return this;
+  multiply(value = 1) {
+    if (value instanceof Vector2) {
+      return new Vector2(this.x * value.x, this.y * value.y);
+    }
+    return new Vector2(this.x * value, this.y * value);
   }
 
   clone() {
@@ -304,11 +301,10 @@ class Item extends Node2D {
     P_SPEED: { type: "speed", value: 100, imgPath: "images/items/debuffs/plus_speed.png"},
     M_SPEED: { type: "speed", value: -100, imgPath: "images/items/buffs/minus_speed.png" },
     P_WIDTH: { type: "width", value: 50, imgPath: "images/items/buffs/plus_size.png" },
-    M_WIDTH: { type: "width", value: -50, imgPath: "images/items/debuffs/minus_size.png" }/*,
-    P_FIREBALL: { type: "fireball", value: true },
-    M_FIREBALL: { type: "fireball", value: false },
-    P_BALL: { type: "multiball", value: null },
-    NONE: { type: "none", value: null }*/
+    M_WIDTH: { type: "width", value: -50, imgPath: "images/items/debuffs/minus_size.png" },
+    //P_FIREBALL: { type: "fireball", value: true },
+    //M_FIREBALL: { type: "fireball", value: false },
+    P_BALL: { type: "multiball", value: 1, imgPath: "images/items/default.png" }
   };
 
   constructor(
@@ -325,7 +321,7 @@ class Item extends Node2D {
     this.upgradeData = Item.UPGRADES[itemUpgradeKey] || Item.UPGRADES.NONE;
 
     this.paddleRef = Globals.paddle;
-    this.ballRef = Globals.ball;
+    this.balls = Globals.balls;
     this.engineRef = Globals.engine;
     
     this.velocity = startDirection.clone().normalize().multiply(startSpeed);
@@ -348,7 +344,7 @@ class Item extends Node2D {
     const stepVelocity = this.velocity.clone().multiply(delta / steps);
 
     for (let i = 0; i < steps; i++) {
-      this.position.addVector(stepVelocity);
+      this.position = this.position.add(stepVelocity);
       
       resolveBoxCollision(this, Globals.worldBorder);
       
@@ -366,22 +362,30 @@ class Item extends Node2D {
     const data = this.upgradeData;
     
     switch (data.type) {
-      case "speed":
-        this.ballRef.speed += data.value;
+      case "speed": // applies the speed gain to all balls
+        this.balls.forEach(ball => {
+          ball.speed += data.value;
+        });
         break;
       case "width":
         this.paddleRef.width += data.value;
-        this.paddleRef.collider.width += data.value;
         break;
       case "fireball":
-        this.paddleRef.isFireball = data.value;
+        this.ballRefRef.isFireball = data.value;
         break;
       case "multiball":
-        // e.g., this.engineRef.add(new Ball(...))
-        break;
-      case "none":
-      default:
-        // Do nothing
+        for (let i = 0; i < data.value; i++) {
+          const newBall = new Ball(
+            Globals.balls[0].position.clone(), 0,
+            randomizeDir(Globals.balls[0].direction, 90),
+            Globals.balls[0].speed,
+            Globals.balls[0].diameter
+          )
+
+          Globals.balls.push(newBall);
+          this.engineRef.add(newBall);
+        }
+
         break;
     }
   }
@@ -411,10 +415,13 @@ class Ball extends Node2D {
     super(position, rotation);
 
     this.direction = startDirection.normalize();
-    this.speed = speed;
+    this._minSpeed = 250;
+    this._speed = speed;
     this.acceleration = 2.5;
     this.velocity = new Vector2();
+
     this.diameter = diameter;
+
     this.paddleRef = Globals.paddle;
     
     const visualScale = 1.0; 
@@ -423,48 +430,63 @@ class Ball extends Node2D {
     this.renderer = new Sprite2D(this, "images/ball/ball.png", spriteSize, spriteSize);
   }
 
+  set speed(value) {
+    this._speed = Math.max(value, this._minSpeed);
+  }
+
+  get speed() {
+    return this._speed;
+  }
+
   process(delta, colliders = []) {
     if (this.position.y > Globals.worldBorder.height - 100) {
       this.queueFree();
     }
 
     this.speed += this.acceleration * delta;
-    
-    if (this.speed <= 200) return;
 
     this.direction.normalize();
-    this.velocity = this.direction.clone().multiply(this.speed * delta);
+    this.velocity = this.direction.multiply(this.speed * delta);
 
     const distanceThisFrame = Math.sqrt(this.velocity.x ** 2 + this.velocity.y ** 2);
-    const stepSize = this.diameter / 2;
-    const steps = Math.ceil(distanceThisFrame / stepSize) || 1;
-    const stepVelocity = this.velocity.clone().multiply(1 / steps);
+    
+    // --- THE OPTIMIZATION ---
+    let steps;
+    if (this.speed <= 200) {
+      // SLOW LANE: Just do 1 normal physics step to save CPU
+      steps = 1; 
+    } else {
+      // FAST LANE: Break it down into tiny steps so it doesn't tunnel through bricks
+      const stepSize = this.diameter / 2;
+      steps = Math.ceil(distanceThisFrame / stepSize) || 1;
+    }
+
+    const stepVelocity = this.velocity.multiply(1 / steps);
 
     for (let i = 0; i < steps; i++) {
-      this.position.addVector(stepVelocity);
+      this.position = this.position.add(stepVelocity);
       
       colliders.forEach(collider => {
         const didHit = resolveBoxCollision(this, collider);
         
         if (didHit && collider === this.paddleRef) {
-          // 1. Find how far from the paddle's center the ball hit
-          // (This assumes paddleRef.position.x is the exact CENTER of your paddle)
           const hitDistance = this.position.x - this.paddleRef.position.x;
-          
-          // 2. Convert that to a percentage ranging from -1.0 to 1.0
-          // (Assuming your paddle has a 'width' property)
           const maxDist = this.paddleRef.width / 2; 
           const normalizedHit = Math.max(-1, Math.min(1, hitDistance / maxDist));
-
-          // 3. Map that percentage to an angle. 
-          // x = -1 (left edge)   -> -180 degrees (Left)
-          // x =  0 (center)      -> -90 degrees  (Straight Up)
-          // x =  1 (right edge)  -> 0 degrees    (Right)
+          
           const angle = 80;
           const bounceAngle = -90 + (normalizedHit * angle);
 
-          // 4. Apply the new direction using your helper function
+          // 1. We change the direction to UP
           this.direction = degToDir(bounceAngle);
+          
+          // 2. CRITICAL FIX: Recalculate the velocity vector for the new direction!
+          this.velocity = this.direction.multiply(this.speed * delta);
+          
+          // 3. Update the stepVelocity so the rest of the for-loop 
+          // moves the ball UP and OUT of the paddle!
+          stepVelocity.x = this.velocity.x / steps;
+          stepVelocity.y = this.velocity.y / steps;
         }
       });
     }
@@ -475,13 +497,22 @@ class Paddle extends Node2D {
   constructor(position = new Vector2(), rotation = 0, width = 100, height = 20, color = "black") {
     super(position, rotation);
 
-    this.width = width;
-    this.height = height;
+    // 1. Set the internal variables first
+    this._minWidth = 100;
+    this._maxWidth = 600;
+
+    this._width = width;
+    this._height = height;
 
     this.targetX = position.x;
 
-    this.collider = new BoxCollider(this.width, this.height);
+    // 2. Initialize the collider with the starting dimensions
+    this.collider = new BoxCollider(this._width, this._height);
+    
     this.renderer = new CanvasItem(this, ctx => {
+      // 1. Tell the canvas to use the color we saved!
+      ctx.fillStyle = this.renderer.color; 
+      
       ctx.beginPath();
       ctx.rect(-this.width / 2, -this.height / 2, this.width, this.height);
       ctx.fill();
@@ -493,23 +524,54 @@ class Paddle extends Node2D {
     window.addEventListener("mousemove", (e) => this._updateMousePos(e));
   }
 
+  // --- WIDTH SETTER & GETTER ---
+  set width(value) {
+    this._width = value;
+    if (value < this._minWidth) this._width = this._minWidth;
+    if (value > this._maxWidth) this._width = this._maxWidth;
+
+    // Safely update the collider if it exists
+    if (this.collider) {
+      this.collider.width = this._width;
+    }
+  }
+
+  get width() {
+    return this._width;
+  }
+
+  // --- HEIGHT SETTER & GETTER ---
+  set height(value) {
+    this._height = value;
+    if (this.collider) {
+       this.collider.height = value;
+    }
+  }
+
+  get height() {
+    return this._height;
+  }
+
   _updateMousePos(e) {
+    if (!Globals.engine || !Globals.engine.canvas) return;
     const rect = Globals.engine.canvas.getBoundingClientRect();
     this.targetX = e.clientX - rect.left;
   }
 
-  process(delta, viewport) {
+  process(delta) {
+    // 1. Move towards the target mouse position
     this.position.x += this.targetX - this.position.x;
 
-    if (viewport) {
+    // 2. Clamp to the screen using our Globals object directly!
+    if (Globals.engine && Globals.engine.canvas) {
       const halfWidth = this.width / 2;
+      const canvasWidth = Globals.engine.canvas.width;
       
-      // Math.min/max "clamping" logic
       if (this.position.x < halfWidth) {
         this.position.x = halfWidth;
       }
-      if (this.position.x > viewport.w - halfWidth) {
-        this.position.x = viewport.w - halfWidth;
+      if (this.position.x > canvasWidth - halfWidth) {
+        this.position.x = canvasWidth - halfWidth;
       }
     }
   }
@@ -552,12 +614,12 @@ class Brick extends Entity2D {
     const randomKey = upgradeKeys[Math.floor(Math.random() * upgradeKeys.length)];
 
     const item = new Item(
-      this.position.clone(), // Always clone vectors so you don't link positions!
+      this.position.clone(),
       randomizeDir(new Vector2(0, -1), 90),
       400, 
       randomKey, // Pass the chosen string (e.g., "P_WIDTH")
+      50,
       40,
-      30,
       Globals.paddle,
       Globals.engine
     );

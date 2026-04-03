@@ -185,6 +185,7 @@ function dirToDeg(direction = new Vector2(1, 0)) {
 function dirToRad(direction = new Vector2(1, 0)) {
   return Math.atan2(direction.y, direction.x);
 }
+
 function randomizeDir(direction = new Vector2, rangeDeg = 0) {
   var startDeg = dirToDeg(direction);
 
