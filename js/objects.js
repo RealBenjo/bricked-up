@@ -26,8 +26,6 @@ class Engine {
           !(n instanceof Item) // no items
         ));
 
-      } else if (node instanceof Item) {
-        node.process(delta, [worldBorder]);
       } else if (node.process) {
         node.process(safeDelta, Viewport);
       }
@@ -314,22 +312,21 @@ class Item extends Node2D {
   };
 
   constructor(
-    position = new Vector2(), 
-    startDirection = new Vector2(), 
+    position = new Vector2, 
+    startDirection = new Vector2,
     startSpeed = 0, 
     itemUpgradeKey = "NONE",
     width = 30, 
-    height = 20,
-    paddleRef = new Paddle(),
-    engineRef = new Engine()
+    height = 20
   ) {
     super(position, 0);
 
     // Grab the specific upgrade data based on the string passed in
     this.upgradeData = Item.UPGRADES[itemUpgradeKey] || Item.UPGRADES.NONE;
 
-    this.paddleRef = paddleRef;
-    this.engineRef = engineRef;
+    this.paddleRef = Globals.paddle;
+    this.ballRef = Globals.ball;
+    this.engineRef = Globals.engine;
     
     this.velocity = startDirection.clone().normalize().multiply(startSpeed);
     this.gravityCalc = new Gravity(this);
@@ -338,10 +335,10 @@ class Item extends Node2D {
     this.renderer = new Sprite2D(this, this.upgradeData.imgPath, width, height);
   }
 
-  process(delta, boundaries = []) {
+  process(delta) {
     this.gravityCalc.process(delta);
 
-    if (this.position.y > worldBorder.height - 100) {
+    if (this.position.y > Globals.worldBorder.height - 100) {
       this.queueFree();
     }
 
@@ -353,9 +350,7 @@ class Item extends Node2D {
     for (let i = 0; i < steps; i++) {
       this.position.addVector(stepVelocity);
       
-      boundaries.forEach(wall => {
-        resolveBoxCollision(this, wall);
-      });
+      resolveBoxCollision(this, Globals.worldBorder);
       
       // Check for paddle collection!
       if (checkCollision(this, this.paddleRef)) {
@@ -372,7 +367,7 @@ class Item extends Node2D {
     
     switch (data.type) {
       case "speed":
-        this.paddleRef.speed += data.value;
+        this.ballRef.speed += data.value;
         break;
       case "width":
         this.paddleRef.width += data.value;
@@ -412,7 +407,7 @@ class Entity2D extends Node2D {
 }
 
 class Ball extends Node2D {
-  constructor(position = new Vector2(), rotation = 0, startDirection = new Vector2(1, 0), speed = 0, diameter = 0, paddleObj = new Paddle()) {
+  constructor(position = new Vector2(), rotation = 0, startDirection = new Vector2(1, 0), speed = 0, diameter = 0) {
     super(position, rotation);
 
     this.direction = startDirection.normalize();
@@ -420,7 +415,7 @@ class Ball extends Node2D {
     this.acceleration = 2.5;
     this.velocity = new Vector2();
     this.diameter = diameter;
-    this.paddleRef = paddleObj;
+    this.paddleRef = Globals.paddle;
     
     const visualScale = 1.0; 
     const spriteSize = diameter * visualScale;
@@ -429,7 +424,7 @@ class Ball extends Node2D {
   }
 
   process(delta, colliders = []) {
-    if (this.position.y > worldBorder.height - 100) {
+    if (this.position.y > Globals.worldBorder.height - 100) {
       this.queueFree();
     }
 
@@ -499,7 +494,7 @@ class Paddle extends Node2D {
   }
 
   _updateMousePos(e) {
-    const rect = engine.canvas.getBoundingClientRect();
+    const rect = Globals.engine.canvas.getBoundingClientRect();
     this.targetX = e.clientX - rect.left;
   }
 
@@ -563,13 +558,13 @@ class Brick extends Entity2D {
       randomKey, // Pass the chosen string (e.g., "P_WIDTH")
       40,
       30,
-      paddle,
-      engine
+      Globals.paddle,
+      Globals.engine
     );
     
     item.gravityCalc.gravity = 500;
 
-    engine.add(item);
+    Globals.engine.add(item);
     this.queueFree();
   }
 }
