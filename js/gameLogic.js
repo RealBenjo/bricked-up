@@ -1,9 +1,16 @@
-// 1. Create an empty object to hold all our important references
-const Globals = {};
+// Globals holds the references to every important object
+const Globals = {
+  engine: null,
+  audio: null,
+  paddle: null,
+  input: null,
+  worldBorder: null,
+  balls: [], // <-- This must be an empty array, not null!
+};
 
-// 2. Setup the engine and viewport
+
+Globals.input = new InputManager();
 Globals.engine = new Engine("canvas", []);
-
 const Viewport = {
   w: Globals.engine.canvas.width,
   h: Globals.engine.canvas.height,
@@ -14,18 +21,29 @@ const borderHeight = Viewport.h + 200;
 const borderCenterY = borderHeight / 2;
 const borderPos = new Vector2(Viewport.w / 2, borderCenterY);
 
-// 3. Add entities to Globals ONE BY ONE in the correct order
-Globals.worldBorder = new WorldBorder(borderPos, Viewport.w, borderHeight);
+Globals.audio = new AudioManager();
 
-// Paddle goes in BEFORE the ball
+// load all SFX and name them
+Globals.audio.preload("paddle_laser", "sounds/SFX/paddle/laser_shoot.wav");
+Globals.audio.preload("paddle_death", "sounds/SFX/paddle/death.wav");
+
+Globals.audio.preload("brick_death", "sounds/SFX/brick/death.wav");
+Globals.audio.preload("brick_explode", "sounds/SFX/brick/explosion.wav");
+
+Globals.audio.preload("ball_death", "sounds/SFX/ball/death.ogg");
+Globals.audio.preload("ball_SO_collision", "sounds/SFX/ball/soft_collision.ogg");
+Globals.audio.preload("ball_HA_collision", "sounds/SFX/ball/hard_collision.ogg");
+
+Globals.worldBorder = new WorldBorder(borderPos, Viewport.w, borderHeight);
 Globals.paddle = new Paddle(
-  new Vector2(Viewport.w / 2, Viewport.h - 20), 
+  new Vector2(Viewport.w / 2, Viewport.h - 20),
   0, 100, 15, "green"
 );
-
-// Ball goes in AFTER the paddle, so the paddle is ready to be referenced!
 Globals.balls = [
-  new Ball(new Vector2(150, 450), 0, new Vector2(1, 3), 500, 20)
+  Object.assign(
+    new Ball(Globals.paddle.position.clone(), 0, new Vector2(0, -1), 500, 20), 
+    { isStuck: true }
+  )
 ];
 
 init();
@@ -33,13 +51,13 @@ function init() {
   const brickHeight = 20;
   var brickRows = 10;
   var brickCols = 20;
-  
+
   for (var x = 1; x <= brickRows; x++) {
     for (var y = 1; y <= brickCols; y++) {
       const brickPos = new Vector2(Viewport.w / brickRows * x, brickHeight * y);
 
       Globals.engine.add(new Brick(
-        brickPos, 0, Math.floor(Math.random() * 1 + 1), Viewport.w / brickRows, brickHeight
+        brickPos, 0, Math.floor(Math.random() * 2 + 1), Viewport.w / brickRows, brickHeight
       ));
     }
   }
