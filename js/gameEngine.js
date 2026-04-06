@@ -245,7 +245,7 @@ class AudioManager {
 
   preload(name, path) {
     const audio = new Audio(path);
-    audio.preload = "none"; 
+    audio.preload = "auto"; 
     this.cache[name] = audio;
   }
 
@@ -274,7 +274,6 @@ class AudioManager {
     return busVol * this.buses.master;
   }
 
-  // --- NEW: Fire-and-forget sound effect player ---
   playSFX(soundName, volume = 1.0, bus = "sfx") {
     const baseAudio = this.getSound(soundName);
     if (!baseAudio) return;
@@ -282,10 +281,13 @@ class AudioManager {
     // Calculate final volume
     const finalVolume = Math.max(0, Math.min(1, volume)) * this.getBusVolume(bus);
 
-    // Clone and play immediately, no nodes required!
-    const soundClone = baseAudio.cloneNode();
-    soundClone.volume = finalVolume;
-    soundClone.play().catch(e => console.warn("Browser blocked audio!", e));
+    // THE FIX: Stop cloning! Make a fresh object using the cached source URL.
+    const soundInstance = new Audio(baseAudio.src);
+    soundInstance.volume = finalVolume; // The browser will actually respect this now!
+    
+    soundInstance.play().catch(e => {
+        if (e.name !== 'AbortError') console.warn("Browser blocked audio!", e);
+    });
   }
 }
 

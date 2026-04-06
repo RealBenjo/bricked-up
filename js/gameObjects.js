@@ -1,3 +1,17 @@
+class GameManager extends Node {
+  constructor() {
+    super();
+
+    this.ballsCount = Globals.balls.length;
+    this.bricksCount = Globals.engine.nodes.filter(node => node instanceof Brick).length;
+    this.playerHealth = 3;
+  }
+
+  process(delta) {
+
+  }
+}
+
 class Item extends Node2D {
   // !!! make sure that in the final release there are NO default.png around !!!
   static LOOT_POOLS = {
@@ -7,10 +21,10 @@ class Item extends Node2D {
   };
 
   static UPGRADES = {
-    P_SPEED: { type: "speed", value: 100, imgPath: "images/items/debuffs/plus_speed.png"},
-    M_SPEED: { type: "speed", value: -100, imgPath: "images/items/buffs/minus_speed.png" },
-    P_WIDTH: { type: "width", value: 50, imgPath: "images/items/buffs/plus_size.png" },
-    M_WIDTH: { type: "width", value: -50, imgPath: "images/items/debuffs/minus_size.png" },
+    P_SPEED: { type: "speed", value: 200, imgPath: "images/items/debuffs/plus_speed.png"},
+    M_SPEED: { type: "speed", value: -200, imgPath: "images/items/buffs/minus_speed.png" },
+    P_WIDTH: { type: "width", value: 100, imgPath: "images/items/buffs/plus_size.png" },
+    M_WIDTH: { type: "width", value: -100, imgPath: "images/items/debuffs/minus_size.png" },
     P_MAGNETIC: { type: "magnet", value: true, imgPath: "images/items/buffs/plus_magnet.png" },
     //P_FIREBALL: { type: "fireball", value: true },
     //M_FIREBALL: { type: "fireball", value: false },
@@ -75,14 +89,26 @@ class Item extends Node2D {
         this.balls.forEach(ball => {
           ball.speed += data.value;
         });
+
+        if (data.value > 0) Globals.audio.playSFX("item_debuff", 1.0);
+        else Globals.audio.playSFX("item_buff", 0.1);
+
         break;
 
       case "width":
         Globals.paddle.width += data.value;
+
+        if (data.value < 0) Globals.audio.playSFX("item_debuff", 1.0);
+        else Globals.audio.playSFX("item_buff", 0.1);
+
         break;
 
       case "fireball":
         this.ballRefRef.isFireball = data.value;
+
+        if (data.value == false) Globals.audio.playSFX("item_debuff", 1.0);
+        else Globals.audio.playSFX("item_buff", 0.1);
+
         break;
 
       case "multiball":
@@ -96,11 +122,15 @@ class Item extends Node2D {
 
           Globals.balls.push(newBall);
           this.engineRef.add(newBall);
+
+          Globals.audio.playSFX("item_buff", 0.1);
         }
 
         break;
       case "magnet":
         Globals.paddle.isMagnetic = data.value;
+
+        Globals.audio.playSFX("item_buff", 0.1);
     }
   }
 }
@@ -122,7 +152,7 @@ class Ball extends Node2D {
     this.direction = startDirection.normalize();
     this._minSpeed = 250;
     this._speed = speed;
-    this.acceleration = 2.5;
+    this.acceleration = 10;
     this.velocity = new Vector2();
 
     this.isStuck = false;
@@ -192,7 +222,8 @@ class Ball extends Node2D {
         const didHit = resolveBoxCollision(this, collider);
         
         if (didHit) {
-          Globals.audio.playSFX("ball_SO_collision", 0.1);
+          // plays on any collision
+          Globals.audio.playSFX("ball_SO_collision", 0.05);
 
           if (collider === Globals.paddle) {          
             if (Globals.paddle.isMagnetic) {
@@ -305,7 +336,7 @@ class Brick extends Entity2D {
 
     this.width = width;
     this.height = height;
-    this.itemChance = 1.0; // 0.0 - 1.0
+    this.itemChance = 0.2; // 0.0 - 1.0
     this.collider = new BoxCollider(this.width, this.height);
     this.healthComponent = new HealthComponent(health, () => this.die());
     this.renderer = new CanvasItem(this, (ctx) => {
@@ -364,7 +395,7 @@ class Brick extends Entity2D {
 
     Globals.engine.add(item);
 
-    Globals.audio.playSFX("brick_death", 0.2);
+    Globals.audio.playSFX("brick_death", 0.15);
     this.queueFree();
   }
 }
