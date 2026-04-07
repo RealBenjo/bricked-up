@@ -1,7 +1,6 @@
 function resolveBoxCollision(mover, target) {
-  if (!target.collider) return false;
+  if (!target.collider || !mover.collider) return false;
 
-  const collider = target.collider;
   const theta = target.rotation * (Math.PI / 180);
   const cos = Math.cos(theta);
   const sin = Math.sin(theta);
@@ -13,38 +12,32 @@ function resolveBoxCollision(mover, target) {
   let localX = dx * cos + dy * sin;
   let localY = -dx * sin + dy * cos;
 
-  const halfW = collider.width / 2;
-  const halfH = collider.height / 2;
-  
-  // ==========================================
-  // GENERALIZATION: Determine the Radius
-  // ==========================================
-  let radius = 0;
-  if (mover.diameter !== undefined) {
-    radius = mover.diameter / 2; // It's a Ball
-  } else if (mover.collider) {
-    // It's an Item (Box). Approximate its size as a circle for smooth bouncing.
-    radius = Math.max(mover.collider.width, mover.collider.height) / 2;
-  }
+  // Combine the sizes of BOTH boxes (Minkowski Sum)
+  const combinedHalfW = (target.collider.width / 2) + (mover.collider.width / 2);
+  const combinedHalfH = (target.collider.height / 2) + (mover.collider.height / 2);
 
   // ====================
   //  INVERTED COLLISION (WORLD BOUNDARIES)
   // ====================
-  if (collider.inverted) {
+  if (target.collider.inverted) {
     let bounced = false;
     let localNormalX = 0;
     let localNormalY = 0;
 
-    if (localX > halfW - radius) {
-      localX = halfW - radius; localNormalX = -1; bounced = true;
-    } else if (localX < -halfW + radius) {
-      localX = -halfW + radius; localNormalX = 1; bounced = true;
+    // Use subtraction here because we are trapped INSIDE the bounds
+    const innerHalfW = (target.collider.width / 2) - (mover.collider.width / 2);
+    const innerHalfH = (target.collider.height / 2) - (mover.collider.height / 2);
+
+    if (localX > innerHalfW) {
+      localX = innerHalfW; localNormalX = -1; bounced = true;
+    } else if (localX < -innerHalfW) {
+      localX = -innerHalfW; localNormalX = 1; bounced = true;
     }
 
-    if (localY > halfH - radius) {
-      localY = halfH - radius; localNormalY = -1; bounced = true;
-    } else if (localY < -halfH + radius) {
-      localY = -halfH + radius; localNormalY = 1; bounced = true;
+    if (localY > innerHalfH) {
+      localY = innerHalfH; localNormalY = -1; bounced = true;
+    } else if (localY < -innerHalfH) {
+      localY = -innerHalfH; localNormalY = 1; bounced = true;
     }
 
     if (bounced) {
@@ -54,13 +47,11 @@ function resolveBoxCollision(mover, target) {
       const globalNormalX = localNormalX * cos - localNormalY * sin;
       const globalNormalY = localNormalX * sin + localNormalY * cos;
 
-      // GENERALIZATION: Bounce the Velocity, not just Direction
       const dot = (mover.velocity.x * globalNormalX) + (mover.velocity.y * globalNormalY);
       if (dot < 0) {
         mover.velocity.x -= 2 * dot * globalNormalX;
         mover.velocity.y -= 2 * dot * globalNormalY;
         
-        // Sync the Ball's direction vector if it has one
         if (mover.direction) {
           mover.direction.x = mover.velocity.x;
           mover.direction.y = mover.velocity.y;
@@ -75,26 +66,38 @@ function resolveBoxCollision(mover, target) {
   // ==========================================
   // STANDARD COLLISION (PADDLE / BRICKS)
   // ==========================================
-  const closestX = Math.max(-halfW, Math.min(localX, halfW));
-  const closestY = Math.max(-halfH, Math.min(localY, halfH));
+  
+  // If the center is within the combined half-widths, we have a Box intersection!
+  if (Math.abs(localX) < combinedHalfW && Math.abs(localY) < combinedHalfH) {
+    
+    // Calculate how deep we are inside the box on both axes
+    const penX = combinedHalfW - Math.abs(localX);
+    const penY = combinedHalfH - Math.abs(localY);
 
-  const diffX = localX - closestX;
-  const diffY = localY - closestY;
-  const distanceSq = (diffX * diffX) + (diffY * diffY);
+    let localNormalX = 0;
+    let localNormalY = 0;
+    let penetration = 0;
 
-  if (distanceSq <= radius * radius) {
-    const distance = Math.sqrt(distanceSq) || 0.0001;
-    const penetration = radius - distance;
+    // Resolve on the axis with the LEAST penetration (shortest path out)
+    if (penX < penY) {
+      localNormalX = localX >= 0 ? 1 : -1; // Push left or right
+      localNormalY = 0;
+      penetration = penX;
+    } else {
+      localNormalX = 0;
+      localNormalY = localY >= 0 ? 1 : -1; // Push up or down
+      penetration = penY;
+    }
 
-    const localNormalX = diffX / distance;
-    const localNormalY = diffY / distance;
-
+    // Convert the local normal back to world space
     const globalNormalX = localNormalX * cos - localNormalY * sin;
     const globalNormalY = localNormalX * sin + localNormalY * cos;
 
+    // Push the mover out of the wall
     mover.position.x += globalNormalX * penetration;
     mover.position.y += globalNormalY * penetration;
 
+    // Bounce the velocity
     const dot = (mover.velocity.x * globalNormalX) + (mover.velocity.y * globalNormalY);
 
     if (dot < 0) {
@@ -106,10 +109,6 @@ function resolveBoxCollision(mover, target) {
         mover.direction.y = mover.velocity.y;
         mover.direction.normalize();
       }
-
-      if (mover instanceof Ball && target.healthComponent) {
-        target.healthComponent.takeDamage(1);
-      }
     }
     return true; 
   }
@@ -117,10 +116,10 @@ function resolveBoxCollision(mover, target) {
   return false; 
 }
 
-function checkCollision(mover, target) {
-  if (!target.collider) return false;
 
-  const collider = target.collider;
+function checkCollision(mover, target) {
+  if (!target.collider || !mover.collider) return false;
+
   const theta = target.rotation * (Math.PI / 180);
   const cos = Math.cos(theta);
   const sin = Math.sin(theta);
@@ -131,33 +130,23 @@ function checkCollision(mover, target) {
   const localX = dx * cos + dy * sin;
   const localY = -dx * sin + dy * cos;
 
-  const halfW = collider.width / 2;
-  const halfH = collider.height / 2;
-  
-  let radius = 0;
-  if (mover.diameter !== undefined) {
-    radius = mover.diameter / 2;
-  } else if (mover.collider) {
-    radius = Math.max(mover.collider.width, mover.collider.height) / 2;
-  }
+  const combinedHalfW = (target.collider.width / 2) + (mover.collider.width / 2);
+  const combinedHalfH = (target.collider.height / 2) + (mover.collider.height / 2);
 
-  if (collider.inverted) {
+  if (target.collider.inverted) {
+    const innerHalfW = (target.collider.width / 2) - (mover.collider.width / 2);
+    const innerHalfH = (target.collider.height / 2) - (mover.collider.height / 2);
+    
     return (
-      localX > halfW - radius ||
-      localX < -halfW + radius ||
-      localY > halfH - radius ||
-      localY < -halfH + radius
+      localX > innerHalfW ||
+      localX < -innerHalfW ||
+      localY > innerHalfH ||
+      localY < -innerHalfH
     );
   }
 
-  const closestX = Math.max(-halfW, Math.min(localX, halfW));
-  const closestY = Math.max(-halfH, Math.min(localY, halfH));
-
-  const diffX = localX - closestX;
-  const diffY = localY - closestY;
-  const distanceSq = (diffX * diffX) + (diffY * diffY);
-
-  return distanceSq <= (radius * radius);
+  // Pure box overlap check
+  return Math.abs(localX) < combinedHalfW && Math.abs(localY) < combinedHalfH;
 }
 
 // these will be massive help when we get to redirecting deflection angles

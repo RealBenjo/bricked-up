@@ -26,20 +26,21 @@ const borderPos = new Vector2(Viewport.w / 2, borderCenterY);
 Globals.audio = new AudioManager();
 
 // load all SFX and name them
-Globals.audio.preload("paddle_laser", "sounds/SFX/paddle/laser_shoot.ogg");
-Globals.audio.preload("paddle_death", "sounds/SFX/paddle/death.ogg");
+Globals.audio.preload("paddle_laser", "sounds/SFX/paddle/laser_shoot.ogg"); // not currently used
+Globals.audio.preload("paddle_death", "sounds/SFX/paddle/death.ogg"); // not currently used
 
 Globals.audio.preload("brick_death", "sounds/SFX/brick/death.ogg");
-Globals.audio.preload("brick_explode", "sounds/SFX/brick/explosion.ogg");
+Globals.audio.preload("brick_explode", "sounds/SFX/brick/explosion.ogg"); // not currently used
 
 Globals.audio.preload("ball_death", "sounds/SFX/ball/death.ogg");
 Globals.audio.preload("ball_SO_collision", "sounds/SFX/ball/soft_collision.ogg");
-Globals.audio.preload("ball_HA_collision", "sounds/SFX/ball/hard_collision.ogg");
+Globals.audio.preload("ball_HA_collision", "sounds/SFX/ball/hard_collision.ogg"); // not currently used
 
 // will add specific sound effects for specific items
 Globals.audio.preload("item_buff", "sounds/SFX/item/buff.ogg");
 Globals.audio.preload("item_debuff", "sounds/SFX/item/debuff.ogg");
 
+Globals.audio.preload("level_cleared", "sounds/SFX/game/level_cleared.ogg");
 Globals.audio.preload("game_over", "sounds/SFX/game/game_over.ogg");
 
 Globals.worldBorder = new WorldBorder(borderPos, Viewport.w, borderHeight);
@@ -54,14 +55,11 @@ Globals.balls = [
   )
 ];
 
-// the game manager keeps track of important game data
-Globals.gameManager = new GameManager();
-
 init();
 function init() {
   const brickHeight = 20;
-  var brickRows = 10;
-  var brickCols = 20;
+  var brickRows = 20; // should be 20
+  var brickCols = 20; // should be 20
 
   for (var x = 1; x <= brickRows; x++) {
     for (var y = 1; y <= brickCols; y++) {
@@ -77,5 +75,7 @@ function init() {
   Globals.engine.add(Globals.worldBorder);
   Globals.engine.add(Globals.paddle);
   Globals.engine.add(Globals.balls[0]); // add the first ball at start
-  Globals.engine.add(Globals.gameManager);
+
+  // the game manager keeps track of important game data
+  Globals.engine.add(Globals.gameManager = new GameManager());
 }

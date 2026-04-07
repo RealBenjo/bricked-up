@@ -1,14 +1,51 @@
 class GameManager extends Node {
   constructor() {
-    super();
-
+    super(); 
     this.ballsCount = Globals.balls.length;
-    this.bricksCount = Globals.engine.nodes.filter(node => node instanceof Brick).length;
+    this.bricksCount = Globals.engine.nodes.filter(node => node.isBrick).length;
     this.playerHealth = 3;
   }
 
-  process(delta) {
+  // "event" receivers
 
+  onBrickDestroyed() {
+    this.bricksCount--;
+    
+    // Win condition!
+    if (this.bricksCount <= 0) {
+      Globals.audio.playSFX("level_cleared", 0.2);
+    }
+  }
+
+  onBallLost() {
+    this.ballsCount--;
+    
+    // Lose life condition!
+    if (this.ballsCount <= 0) {
+      this.playerHealth--;
+      // TODO: show the player health
+      Globals.balls = [
+        Object.assign(
+          new Ball(Globals.paddle.position.clone(), 0, new Vector2(0, -1), 500, 20),
+          { isStuck: true }
+        )
+      ];
+      Globals.engine.add(Globals.balls[0]);
+      
+      if (this.playerHealth <= 0) {
+        Globals.audio.playSFX("game_over", 0.2);
+      } else {
+        // Respawn the ball logic goes here
+      }
+    }
+  }
+
+  onBallAdded() {
+    this.ballsCount++;
+  }
+
+  process(delta) {
+    
   }
 }
 
@@ -159,6 +196,7 @@ class Ball extends Node2D {
     this.stuckOffsetX = 0;
 
     this.diameter = diameter;    
+    this.collider = new BoxCollider(diameter, diameter);
     this.renderer = new Sprite2D(this, "images/ball/ball.png", this.diameter, this.diameter);
   }
 
@@ -173,6 +211,7 @@ class Ball extends Node2D {
   process(delta, colliders = []) {
     if (this.position.y > Globals.worldBorder.height - 180) {
       Globals.audio.playSFX("ball_death", 0.2);
+      Globals.gameManager.onBallLost();
       
       this.queueFree();
     }
@@ -225,11 +264,14 @@ class Ball extends Node2D {
           // plays on any collision
           Globals.audio.playSFX("ball_SO_collision", 0.05);
 
-          if (collider === Globals.paddle) {          
+          if (collider instanceof Brick) {
+            collider.healthComponent.takeDamage(1);
+
+          } else if (collider === Globals.paddle) {          
             if (Globals.paddle.isMagnetic) {
               this.isStuck = true;
               this.stuckOffsetX = this.position.x - Globals.paddle.position.x;
-              break; 
+              break;
             }
 
             const hitDistance = this.position.x - Globals.paddle.position.x;
@@ -333,10 +375,12 @@ class Brick extends Entity2D {
     position.x -= width/2;
     position.y -= height/2;
     super(position, rotation);
+    this.isBrick = true; // name tag
 
     this.width = width;
     this.height = height;
     this.itemChance = 0.2; // 0.0 - 1.0
+
     this.collider = new BoxCollider(this.width, this.height);
     this.healthComponent = new HealthComponent(health, () => this.die());
     this.renderer = new CanvasItem(this, (ctx) => {
@@ -353,7 +397,7 @@ class Brick extends Entity2D {
 
   die() {
     if (Math.random() > this.itemChance) {
-      this.queueFree();
+      this.dieAndUpdate();
       return;
     }
 
@@ -394,8 +438,13 @@ class Brick extends Entity2D {
     item.gravityCalc.gravity = 500;
 
     Globals.engine.add(item);
-
     Globals.audio.playSFX("brick_death", 0.15);
+
+    this.dieAndUpdate();
+  }
+
+  dieAndUpdate() {
+    Globals.gameManager.onBrickDestroyed(); 
     this.queueFree();
   }
 }
