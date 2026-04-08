@@ -218,11 +218,12 @@ class Ball extends Node2D {
 
     // --- NEW STICKY LOGIC ---
     if (this.isStuck) {
-      // 1. Look directly at Globals.paddle!
       this.position.x = Globals.paddle.position.x + this.stuckOffsetX;
+      // push the ball pixel perfect upwards
       this.position.y = Globals.paddle.position.y - (Globals.paddle.height / 2) - (this.diameter / 2);
 
-      // 2. Wait for the player to click or press Space to launch it
+
+      // wait for player's command to launch the ball
       if (Globals.input.isMouseButtonDown(0) || Globals.input.isKeyDown("Space")) {
         this.isStuck = false;
         
@@ -314,9 +315,7 @@ class Paddle extends Node2D {
     this.renderer.addAnimation("laser", [1,5,9,13], 10, true);
     this.renderer.addAnimation("magnet", [2,6,10,14], 10, true);
     this.renderer.addAnimation("normal", [3,7,11,15], 10, true);
-
     this.renderer.positionOffset = new Vector2(0, -10);
-
     this.renderer.heightOffset = 20;
 
     this.renderer.play("normal");
@@ -328,7 +327,7 @@ class Paddle extends Node2D {
     if (value < this._minWidth) this._width = this._minWidth;
     if (value > this._maxWidth) this._width = this._maxWidth;
 
-    // Safely update the collider if it exists
+    // update the collider if it exists
     if (this.collider) {
       this.collider.width = this._width;
     }
@@ -351,6 +350,22 @@ class Paddle extends Node2D {
 
 
   process(delta) {
+    // --- code from here is ass -------------------
+    var isBallStuck = false;
+
+    Globals.balls.forEach(ball => {
+      if (ball.isStuck) {
+        isBallStuck = true;
+      }
+    });
+
+    if (isBallStuck) {
+      this.renderer.play("magnet");
+    } else if (!isBallStuck) {
+      this.renderer.play("normal");
+    }
+    // --- code to here is ass ---------------------
+
     this.targetX = Globals.input.mousePosition.x;
 
     this.position.x += this.targetX - this.position.x;
@@ -370,8 +385,7 @@ class Paddle extends Node2D {
 
 class Brick extends Entity2D {
   constructor(position = new Vector2(), rotation = 0, health = 1, width = 10, height = 10) {
-    position.x -= width/2;
-    position.y -= height/2;
+    position = position.add(new Vector2(-width/2, -height/2));
     super(position, rotation);
     this.isBrick = true; // name tag
 
@@ -397,7 +411,7 @@ class Brick extends Entity2D {
     this.checkColor();
   }
 
-  checkColor() {
+  checkColor() { // this silly function will be updated at one point
     this.renderer.color = "rgb(0,0," + this.healthComponent.health*70 + ")";
   }
 
