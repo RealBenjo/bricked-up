@@ -46,7 +46,7 @@ Globals.audio.preload("game_over", "sounds/SFX/game/game_over.ogg");
 Globals.worldBorder = new WorldBorder(borderPos, Viewport.w, borderHeight);
 Globals.paddle = new Paddle(
   new Vector2(Viewport.w / 2, Viewport.h - 20),
-  0, 100, 15, "green"
+  0, 100, 15
 );
 Globals.balls = [
   Object.assign(
@@ -77,5 +77,6 @@ function init() {
   Globals.engine.add(Globals.balls[0]); // add the first ball at start
 
   // the game manager keeps track of important game data
+  // and it needs to be added last
   Globals.engine.add(Globals.gameManager = new GameManager());
 }

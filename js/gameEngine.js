@@ -158,9 +158,12 @@ class BoxCollider {
 }
 
 class HealthComponent {
-  constructor(health = 100, onDeath) {
-    this.health = health;
+  constructor(health = 100, onDeath, onHealthChanged) {
+    // signals
     this.onDeath = onDeath;
+    this.healthChanged = onHealthChanged;
+    
+    this._health = health;
   }
 
   takeDamage(amount = 0) {
@@ -169,6 +172,14 @@ class HealthComponent {
     if (this.health <= 0) {
       if (this.onDeath) this.onDeath();
     }
+  }
+
+  set health(value) {
+    this._health = value
+    if (this.healthChanged) this.healthChanged();
+  }
+  get health() {
+    return this._health;
   }
 }
 

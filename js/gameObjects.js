@@ -247,7 +247,6 @@ class Ball extends Node2D {
     if (this.speed <= 200) {
       steps = 1; 
     } else {
-      // Prevents division by zero crashes!
       const stepSize = Math.max(this.diameter / 2, 1); 
       steps = Math.ceil(distanceThisFrame / stepSize) || 1;
     }
@@ -261,10 +260,12 @@ class Ball extends Node2D {
         const didHit = resolveBoxCollision(this, collider);
         
         if (didHit) {
-          // plays on any collision
           Globals.audio.playSFX("ball_SO_collision", 0.05);
+          
+          stepVelocity.x = this.velocity.x / steps;
+          stepVelocity.y = this.velocity.y / steps;
 
-          if (collider instanceof Brick) {
+          if (collider.isBrick && collider.healthComponent) {
             collider.healthComponent.takeDamage(1);
 
           } else if (collider === Globals.paddle) {          
@@ -278,14 +279,11 @@ class Ball extends Node2D {
             const maxDist = Globals.paddle.width / 2; 
             const normalizedHit = Math.max(-1, Math.min(1, hitDistance / maxDist));
             
-            const angle = 80;
+            const angle = 80; // allowed angle from the normal of the paddle
             const bounceAngle = -90 + (normalizedHit * angle);
 
             this.direction = degToDir(bounceAngle);
             this.velocity = this.direction.multiply(this.speed * delta);
-            
-            stepVelocity.x = this.velocity.x / steps;
-            stepVelocity.y = this.velocity.y / steps;
           }
         }
       }
@@ -298,7 +296,7 @@ class Ball extends Node2D {
 }
 
 class Paddle extends Node2D {
-  constructor(position = new Vector2(), rotation = 0, width = 100, height = 20, color = "black") {
+  constructor(position = new Vector2(), rotation = 0, width = 100, height = 20) {
     super(position, rotation);
 
     this._minWidth = 100;
@@ -382,7 +380,11 @@ class Brick extends Entity2D {
     this.itemChance = 0.2; // 0.0 - 1.0
 
     this.collider = new BoxCollider(this.width, this.height);
-    this.healthComponent = new HealthComponent(health, () => this.die());
+    this.healthComponent = new HealthComponent(
+      health,
+      () => this.die(),
+      () => this.checkColor()
+    );
     this.renderer = new CanvasItem(this, (ctx) => {
       ctx.beginPath();
       ctx.rect(-this.width / 2, -this.height / 2, this.width, this.height);
@@ -391,7 +393,11 @@ class Brick extends Entity2D {
     });
   }
 
-  process() {
+  ready() {
+    this.checkColor();
+  }
+
+  checkColor() {
     this.renderer.color = "rgb(0,0," + this.healthComponent.health*70 + ")";
   }
 
