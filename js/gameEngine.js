@@ -175,7 +175,7 @@ class HealthComponent {
   }
 
   set health(value) {
-    this._health = value
+    this._health = value;
     if (this.healthChanged) this.healthChanged();
   }
   get health() {
@@ -348,8 +348,8 @@ class AudioStreamPlayer extends Node {
   play() {
     // Failsafe so it doesn't crash if a sound isn't loaded yet
     if (!this.baseAudio) {
-        console.warn(`AudioStreamPlayer: Can't find '${this.soundName}'.`);
-        return; 
+      console.warn(`AudioStreamPlayer: Can't find '${this.soundName}'.`);
+      return; 
     }
 
     // Multiply base volume by your global bus volume
@@ -369,7 +369,7 @@ class AudioStreamPlayer extends Node {
     const soundClone = this.baseAudio.cloneNode();
     soundClone.volume = finalVolume;
     soundClone.play().catch(e => {
-        if (e.name !== 'AbortError') console.warn("Browser blocked audio:", e);
+      if (e.name !== 'AbortError') console.warn("Browser blocked audio:", e);
     });
   }
 
@@ -393,12 +393,10 @@ class Node2D extends Node {
   }
 
   // --- ROTATION GETTERS & SETTERS ---
-
   set rotation(value) {
     // standard math for degrees (0 to 360)
     this._rotation = ((value % 360) + 360) % 360;
   }
-
   get rotation() {
     return this._rotation;
   }
@@ -414,7 +412,6 @@ class Node2D extends Node {
     // If it has no parent, its local position IS its global position!
     return this.position.clone();
   }
-
   set globalPosition(newGlobalPos) {
     if (this.parent) {
       // If we have a parent, figure out our LOCAL position relative to it
