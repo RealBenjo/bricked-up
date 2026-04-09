@@ -11,9 +11,13 @@ class GameManager extends Node {
   onBrickDestroyed() {
     this.bricksCount--;
     
-    // Win condition!
     if (this.bricksCount <= 0) {
-      Globals.audio.playSFX("level_cleared", 0.2);
+      console.log("LEVEL CLEARED!");
+      // TODO: play sfx here
+      
+      // Advance to the next level!
+      this.currentLevelIndex = (this.currentLevelIndex || 0) + 1;
+      loadLevel(this.currentLevelIndex);
     }
   }
 

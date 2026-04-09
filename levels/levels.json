@@ -1,0 +1,19 @@
+[
+  {
+    "name": "Level 1: The Warmup",
+    "bricks": [
+      { "col": 1, "row": 6, "health": 1, "stat": null },
+      { "col": 6, "row": 6, "health": 1, "stat": null },
+      { "col": 7, "row": 6, "health": 2, "stat": null }
+    ]
+  },
+  {
+    "name": "Level 2: The Wall",
+    "bricks": [
+      { "col": 7, "row": 5, "health": 3, "stat": null },
+      { "col": 5, "row": 5, "health": 3, "stat": null },
+      { "col": 15, "row": 7, "health": 3, "stat": null },
+      { "col": 10, "row": 10, "health": 3, "stat": null }
+    ]
+  }
+]

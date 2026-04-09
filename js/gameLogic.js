@@ -56,27 +56,16 @@ Globals.balls = [
 ];
 
 init();
+
 function init() {
-  const brickHeight = 20;
-  var brickRows = 20; // should be 20
-  var brickCols = 20; // should be 20
-
-  for (var x = 1; x <= brickRows; x++) {
-    for (var y = 1; y <= brickCols; y++) {
-      const brickPos = new Vector2(Viewport.w / brickRows * x, brickHeight * y);
-
-      Globals.engine.add(new Brick(
-        brickPos, 0, Math.floor(Math.random() * 2 + 1), Viewport.w / brickRows, brickHeight
-      ));
-    }
-  }
-
-  // add important stuff to the engine
+  // 1. Add all permanent stuff to the engine ONCE
   Globals.engine.add(Globals.worldBorder);
   Globals.engine.add(Globals.paddle);
-  Globals.engine.add(Globals.balls[0]); // add the first ball at start
+  Globals.engine.add(Globals.balls[0]); 
+  
+  Globals.gameManager = new GameManager();
+  Globals.engine.add(Globals.gameManager);
 
-  // the game manager keeps track of important game data
-  // and it needs to be added last
-  Globals.engine.add(Globals.gameManager = new GameManager());
+  // 2. Load the first level from the JSON!
+  loadLevel(0); 
 }
