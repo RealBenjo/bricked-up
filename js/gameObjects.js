@@ -2,8 +2,9 @@ class GameManager extends Node {
   constructor() {
     super(); 
     this.ballsCount = Globals.balls.length;
-    this.bricksCount = Globals.engine.nodes.filter(node => node.isBrick).length;
+    this.bricksCount;
     this.playerHealth = 3;
+    this.currentLevelIndex = 0;
   }
 
   // "event" receivers
@@ -12,34 +13,35 @@ class GameManager extends Node {
     this.bricksCount--;
     
     if (this.bricksCount <= 0) {
-      console.log("LEVEL CLEARED!");
+      // level cleared
       // TODO: play sfx here
       
-      // Advance to the next level!
-      this.currentLevelIndex = (this.currentLevelIndex || 0) + 1;
+      this.currentLevelIndex++;
       loadLevel(this.currentLevelIndex);
     }
   }
 
   onBallLost() {
-    this.ballsCount--;
+    // this now gets an accurate count of balls
+    this.ballsCount = Globals.balls.length-1;
     
     // Lose life condition!
     if (this.ballsCount <= 0) {
       this.playerHealth--;
       // TODO: show the player health
+
       Globals.balls = [
         Object.assign(
           new Ball(Globals.paddle.position.clone(), 0, new Vector2(0, -1), 500, 20),
           { isStuck: true }
         )
       ];
-      Globals.engine.add(Globals.balls[0]);
+      Globals.engine.add(Globals.balls[0], 3);
       
       if (this.playerHealth <= 0) {
+        this.playerHealth = 3;
         Globals.audio.playSFX("game_over", 0.2);
-      } else {
-        // Respawn the ball logic goes here
+        loadLevel(0);
       }
     }
   }
@@ -81,12 +83,10 @@ class Item extends Node2D {
     height = 20
   ) {
     super(position, 0);
+    this.isItem = true; // nametag
 
     // Grab the specific upgrade data based on the string passed in
     this.upgradeData = Item.UPGRADES[itemUpgradeKey];
-
-    this.balls = Globals.balls;
-    this.engineRef = Globals.engine;
     
     this.velocity = startDirection.clone().normalize().multiply(startSpeed);
     this.gravityCalc = new Gravity(this);
@@ -127,7 +127,7 @@ class Item extends Node2D {
     
     switch (data.type) {
       case "speed": // applies the speed gain to all balls
-        this.balls.forEach(ball => {
+        Globals.balls.forEach(ball => {
           ball.speed += data.value;
         });
 
@@ -162,7 +162,7 @@ class Item extends Node2D {
           )
 
           Globals.balls.push(newBall);
-          this.engineRef.add(newBall);
+          Globals.engine.add(newBall);
 
           Globals.audio.playSFX("item_buff", 0.1);
         }
@@ -187,8 +187,9 @@ class WorldBorder extends Node2D {
 }
 
 class Ball extends Node2D {
-  constructor(position = new Vector2(), rotation = 0, startDirection = new Vector2(1, 0), speed = 0, diameter = 0) {
+  constructor(position = new Vector2(), rotation = 0, startDirection = new Vector2(1, 0), speed = 500, diameter = 20) {
     super(position, rotation);
+    this.isBall = true;
 
     this.direction = startDirection.normalize();
     this._minSpeed = 250;
@@ -388,35 +389,44 @@ class Paddle extends Node2D {
 }
 
 class Brick extends Entity2D {
-  constructor(position = new Vector2(), rotation = 0, health = 1, width = 10, height = 10) {
+  constructor(position = new Vector2(), rotation = 0, health = 1, width = 10, height = 10, statType = "normal", color = "white") {
+
     position = position.add(new Vector2(-width/2, -height/2));
     super(position, rotation);
-    this.isBrick = true; // name tag
-
+    this.isBrick = true; 
+    
     this.width = width;
     this.height = height;
-    this.itemChance = 0.2; // 0.0 - 1.0
-
+    this.itemChance = 1.0; 
+    
+    // Save the color string from the JSON to the brick
+    this.baseColor = color;
+    
+    this.renderer = new Sprite2D(this, "images/bricks/basic_brick.png", this.width, this.height);
     this.collider = new BoxCollider(this.width, this.height);
+    
     this.healthComponent = new HealthComponent(
       health,
       () => this.die(),
       () => this.checkColor()
     );
-    this.renderer = new CanvasItem(this, (ctx) => {
-      ctx.beginPath();
-      ctx.rect(-this.width / 2, -this.height / 2, this.width, this.height);
-      ctx.fill();
-      ctx.closePath();
-    });
+
+    if (statType && StatRegistry[statType]) {
+      this.stat = new StatRegistry[statType](this);
+    } else {
+      this.stat = new NormalStat(this); 
+    }
   }
 
   ready() {
     this.checkColor();
   }
 
-  checkColor() { // this silly function will be updated at one point
-    this.renderer.color = "rgb(0,0," + this.healthComponent.health*70 + ")";
+  checkColor() {
+    // if there is a typo in the JSON, it defaults to white.
+    const actualColor = BrickStat.Colors[this.baseColor] || "white";
+    
+    this.renderer.modulate = actualColor;
   }
 
   die() {

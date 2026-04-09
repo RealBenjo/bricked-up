@@ -1,47 +1,46 @@
 async function loadLevel(levelIndex) {
   // 1. WIPE THE OLD LEVEL
-  // Your engine will naturally delete anything with isQueueFreed = true on the next frame!
-  Globals.engine.nodes.forEach(node => {
-    if (node.isBrick || node.isItem) {
-      node.isQueueFreed = true; 
+  Globals.engine.nodes.flat().forEach(node => {
+    if (node.isBrick || node.isItem || node.isBall) {
+      node.isQueueFreed = true;
     }
   });
 
   // 2. RESET THE PLAYER
   // Snap the ball back to the paddle
+  Globals.paddle.width = 100;
+  Globals.paddle.isMagnetic = false;
+
+  Globals.balls[0] = new Ball(new Vector2, 0, new Vector2(0,-1));
   Globals.balls[0].isStuck = true;
   Globals.balls[0].stuckOffsetX = 0;
   
-  // (Optional) Reset paddle position to center here if you want
+  // Add the ball to layer 3 so it draws over the bricks
+  Globals.engine.add(Globals.balls[0], 3);
 
-  // 3. FETCH THE JSON DATA
   try {
     const response = await fetch("levels/levels.json");
     const levelsData = await response.json();
     
     // Safety check in case you beat the last level
     if (levelIndex >= levelsData.length) {
-      console.log("YOU BEAT THE WHOLE GAME!");
       return;
     }
 
     const levelData = levelsData[levelIndex];
-    console.log(`Loading: ${levelData.name}`);
 
     // 4. BUILD THE NEW BRICKS
     const brickHeight = 20;
     const maxCols = 20; 
     const brickWidth = Viewport.w / maxCols;
 
-    levelData.bricks.forEach(bData => {
-      // Convert the grid col/row from JSON into actual screen X/Y pixels
-      const brickPos = new Vector2(brickWidth * bData.col, brickHeight * bData.row);
+    // create the bricks with appropriate data
+    levelData.bricks.forEach(brickData => {
+      const brickPos = new Vector2(brickWidth * brickData.col, brickHeight * brickData.row);
 
-      // (Optional) Here is where you would read bData.stat and attach your BrickStat classes!
-      let statComponent = null;
-
+      // We pass brickData.color at the very end!
       Globals.engine.add(new Brick(
-        brickPos, 0, bData.health, brickWidth, brickHeight, statComponent
+        brickPos, 0, 1, brickWidth, brickHeight, brickData.stat, brickData.color
       ));
     });
 

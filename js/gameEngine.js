@@ -1,49 +1,83 @@
 class Engine {
-  constructor(canvasId, nodes = []) {
+  constructor(canvasId) {
     this.canvas = document.getElementById(canvasId);
     this.ctx = this.canvas.getContext("2d");
-    this.nodes = nodes;
+    
+    // NEW: Our toggle flag for pausing the engine
+    this.isRunning = true; 
+    
+    // Initialize a 2D array with 5 empty layers
+    this.nodes = [[], [], [], [], []]; 
+    
     this.lastTime = performance.now();
 
     requestAnimationFrame((t) => this._loop(t));
   }
 
   _loop(timestamp) {
+    // NEW: If the engine is paused, just wait for the next frame and skip everything else.
+    if (!this.isRunning) {
+      this.lastTime = timestamp; // Keep time updated so things don't teleport when unpaused
+      requestAnimationFrame((t) => this._loop(t));
+      return;
+    }
+
     const delta = (timestamp - this.lastTime) / 1000;
     const safeDelta = Math.min(delta, 0.1);
     this.lastTime = timestamp;
 
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
-    // filter out anything that isQueueFreed (aka removed from memory)
-    this.nodes = this.nodes.filter(node => !node.isQueueFreed);
-    // do the same thing but for the Global balls
+    // Filter out isQueueFreed from ALL layers
+    for (let z = 0; z < this.nodes.length; z++) {
+      if (this.nodes[z]) {
+        this.nodes[z] = this.nodes[z].filter(node => !node.isQueueFreed);
+      }
+    }
+    
     Globals.balls = Globals.balls.filter(node => !node.isQueueFreed);
 
-    this.nodes.forEach(node => {
-      if (node instanceof Ball) {
-        node.process(safeDelta, this.nodes.filter(n =>
-          n !== node && // filter self so it doesnt collide w/ itself
-          n.collider && // has a collider
-          !(n instanceof Item) && // no items
-          !(n instanceof Ball) // no balls (might be unnecesary but better safe than sorry amirite)
-        ));
+    // Flatten the 2D array into a 1D array just for collision checks
+    const allActiveNodes = this.nodes.flat();
 
-      } else if (node.process) {
-        node.process(safeDelta);
-      }
+    // Loop through layers from bottom (0) to top
+    for (let z = 0; z < this.nodes.length; z++) {
+      if (!this.nodes[z]) continue; // Skip if layer doesn't exist
 
-      if (node.renderer && typeof node.renderer.draw === "function") {
-        node.renderer.draw(this.ctx);
-      }
-    });
+      this.nodes[z].forEach(node => {
+        if (node instanceof Ball) {
+          // Pass the FLATTENED array to the ball so it can hit anything on any layer
+          node.process(safeDelta, allActiveNodes.filter(n =>
+            n !== node && // filter self so it doesnt collide w/ itself
+            n.collider && // has a collider
+            !(n instanceof Item) && // no items
+            !(n instanceof Ball) // no balls 
+          ));
+
+        } else if (node.process) {
+          node.process(safeDelta);
+        }
+
+        if (node.renderer && typeof node.renderer.draw === "function") {
+          node.renderer.draw(this.ctx);
+        }
+      });
+    }
 
     requestAnimationFrame((t) => this._loop(t));
   }
 
-  add(node) {
-    this.nodes.push(node);
-    node.ready();
+  add(node, zIndex = 0) {
+    // Safety check: if you pass a zIndex higher than we have layers, create the layer
+    if (!this.nodes[zIndex]) {
+      this.nodes[zIndex] = [];
+    }
+    
+    this.nodes[zIndex].push(node);
+    
+    if (typeof node.ready === "function") {
+      node.ready();
+    }
   }
 }
 
@@ -85,10 +119,6 @@ class InputManager {
     if (e.type === "mousedown") this._buttonsDown.add(e.button);
     if (e.type === "mouseup") this._buttonsDown.delete(e.button);
   }
-
-  // ==========================================
-  // --- GODOT-STYLE PUBLIC API ---
-  // ==========================================
 
   isKeyDown(keyCode) {
     // Example: Input.isKeyDown("Space") or Input.isKeyDown("KeyW")
@@ -184,11 +214,14 @@ class HealthComponent {
 }
 
 class CanvasItem {
-  constructor(owner, drawFunction) {
+  constructor(owner, drawFunction = null) {
     this.owner = owner;
     this.visible = true;
     this.alpha = 1;
-    this.color = "rgba(0,0,0,0)"; // Default color property
+    
+    // Godot uses white (#ffffff) as the default "un-tinted" state
+    this.modulate = "#ffffff"; 
+    
     this.drawFunction = drawFunction;
   }
 
@@ -200,45 +233,204 @@ class CanvasItem {
     ctx.rotate(this.owner.rotation * Math.PI / 180);
     ctx.globalAlpha = this.alpha;
 
-    // Apply the color to BOTH fill and stroke so the callback can choose
-    ctx.fillStyle = this.color;
-    ctx.strokeStyle = this.color;
+    // Automatically apply modulate for raw shape drawing
+    ctx.fillStyle = this.modulate;
+    ctx.strokeStyle = this.modulate;
 
     if (this.drawFunction) {
-      this.drawFunction(ctx);
+      // Pass the item itself so the callback can grab the modulate value
+      this.drawFunction(ctx, this);
     }
 
     ctx.restore();
   }
 }
 
-class Sprite2D {
-  constructor(owner = this, imagePath = "", width = 0, height = 0) {
-    this.owner = owner;
+class Sprite2D extends CanvasItem {
+  constructor(owner, imagePath = "", width = 0, height = 0) {
+    super(owner); // Sets up modulate, alpha, visible from CanvasItem
     this.width = width;
     this.height = height;
 
     this.texture = new Image();
     this.texture.src = imagePath;
+
+    // Godot-style tinting cache
+    this.tintedCache = null;
+    this._lastModulate = this.modulate;
+
+    this.texture.onload = () => {
+      this.updateTintCache();
+    };
+
+    // CanvasItem will call this automatically with translation/rotation already applied!
+    this.drawFunction = (ctx) => {
+      if (!this.texture.complete) return;
+
+      // Update the tint cache only if the color changed
+      if (this.modulate !== this._lastModulate) {
+        this.updateTintCache();
+        this._lastModulate = this.modulate;
+      }
+
+      const renderSource = this.tintedCache || this.texture;
+
+      ctx.drawImage(
+        renderSource,
+        -this.width / 2,
+        -this.height / 2,
+        this.width,
+        this.height
+      );
+    };
   }
 
-  draw(ctx) {
-    if (!this.texture.complete) return;
+  updateTintCache() {
+    // If no tint, clear the cache to save memory
+    if (this.modulate === "#ffffff" || this.modulate === "white") {
+      this.tintedCache = null;
+      return;
+    }
 
-    ctx.save();
+    const offscreen = document.createElement("canvas");
+    offscreen.width = this.texture.width || this.width;
+    offscreen.height = this.texture.height || this.height;
+    const oCtx = offscreen.getContext("2d");
 
-    ctx.translate(this.owner.position.x, this.owner.position.y);
-    ctx.rotate(this.owner.rotation * Math.PI / 180);
+    oCtx.drawImage(this.texture, 0, 0, offscreen.width, offscreen.height);
+    oCtx.globalCompositeOperation = "multiply";
+    oCtx.fillStyle = this.modulate;
+    oCtx.fillRect(0, 0, offscreen.width, offscreen.height);
+    oCtx.globalCompositeOperation = "destination-in";
+    oCtx.drawImage(this.texture, 0, 0, offscreen.width, offscreen.height);
 
-    ctx.drawImage(
-      this.texture,
-      -this.width / 2,
-      -this.height / 2,
-      this.width,
-      this.height
-    );
+    this.tintedCache = offscreen;
+  }
+}
 
-    ctx.restore();
+class AnimatedSprite2D extends CanvasItem {
+  constructor(owner, imagePath = "", frameWidth = 0, frameHeight = 0, hFrames = 1, vFrames = 1) {
+    super(owner); // Now correctly extends CanvasItem instead of Node2D!
+
+    this.frameWidth = frameWidth;
+    this.frameHeight = frameHeight;
+    this.hFrames = hFrames;
+    this.vFrames = vFrames;
+    
+    this.positionOffset = new Vector2(0, 0);
+    this.widthOffset = 0;
+    this.heightOffset = 0;
+
+    this.texture = new Image();
+    this.texture.src = imagePath;
+
+    this.animations = {};
+    this.currentAnimation = null;
+    this.currentFrameIndex = 0;
+    
+    this.isPlaying = false;
+    this.timer = 0;
+
+    // Godot-style tinting cache
+    this.tintedCache = null;
+    this._lastModulate = this.modulate;
+
+    this.texture.onload = () => {
+      this.updateTintCache();
+    };
+
+    // CanvasItem will call this automatically with translation/rotation already applied!
+    this.drawFunction = (ctx) => {
+      if (!this.texture.complete || !this.currentAnimation) return;
+
+      if (this.modulate !== this._lastModulate) {
+        this.updateTintCache();
+        this._lastModulate = this.modulate;
+      }
+
+      const anim = this.animations[this.currentAnimation];
+      const actualFrame = anim.frames[this.currentFrameIndex];
+
+      const col = actualFrame % this.hFrames;
+      const row = Math.floor(actualFrame / this.hFrames);
+
+      const sourceX = col * this.frameWidth;
+      const sourceY = row * this.frameHeight;
+
+      ctx.imageSmoothingEnabled = false;
+
+      const finalWidth = this.owner.width + this.widthOffset;
+      const finalHeight = this.owner.height + this.heightOffset;
+      
+      // We don't need to translate/rotate manually anymore! Just apply offsets to the draw position.
+      const destX = Math.round(-finalWidth / 2 + this.positionOffset.x);
+      const destY = Math.round(-finalHeight / 2 + this.positionOffset.y);
+
+      const renderSource = this.tintedCache || this.texture;
+
+      ctx.drawImage(
+        renderSource,
+        sourceX, sourceY, this.frameWidth, this.frameHeight, 
+        destX, destY, finalWidth, finalHeight                
+      );
+    };
+  }
+
+  // Same logic as Sprite2D - we tint the entire spritesheet at once
+  updateTintCache() {
+    if (this.modulate === "#ffffff" || this.modulate === "white") {
+      this.tintedCache = null;
+      return;
+    }
+
+    const offscreen = document.createElement("canvas");
+    offscreen.width = this.texture.width;
+    offscreen.height = this.texture.height;
+    const oCtx = offscreen.getContext("2d");
+
+    oCtx.drawImage(this.texture, 0, 0, offscreen.width, offscreen.height);
+    oCtx.globalCompositeOperation = "multiply";
+    oCtx.fillStyle = this.modulate;
+    oCtx.fillRect(0, 0, offscreen.width, offscreen.height);
+    oCtx.globalCompositeOperation = "destination-in";
+    oCtx.drawImage(this.texture, 0, 0, offscreen.width, offscreen.height);
+
+    this.tintedCache = offscreen;
+  }
+
+  addAnimation(name, frameIndices, fps = 10, loop = true) {
+    this.animations[name] = { frames: frameIndices, fps: fps, loop: loop };
+  }
+
+  play(name) {
+    if (this.currentAnimation === name && this.isPlaying) return;
+    this.currentAnimation = name;
+    this.currentFrameIndex = 0;
+    this.timer = 0;
+    this.isPlaying = true;
+  }
+
+  process(delta) {
+    if (!this.isPlaying || !this.currentAnimation) return;
+
+    const anim = this.animations[this.currentAnimation];
+    const timePerFrame = 1 / anim.fps;
+
+    this.timer += delta; 
+
+    if (this.timer >= timePerFrame) {
+      this.timer -= timePerFrame;
+      this.currentFrameIndex++;
+
+      if (this.currentFrameIndex >= anim.frames.length) {
+        if (anim.loop) {
+          this.currentFrameIndex = 0;
+        } else {
+          this.currentFrameIndex = anim.frames.length - 1;
+          this.isPlaying = false;
+        }
+      }
+    }
   }
 }
 
@@ -466,102 +658,6 @@ class Node2D extends Node {
     const globalY = rotatedY + this.position.y;
 
     return new Vector2(globalX, globalY);
-  }
-}
-
-class AnimatedSprite2D extends Node2D {
-  constructor(owner = this, imagePath = "", frameWidth = 0, frameHeight = 0, hFrames = 1, vFrames = 1) {
-    super(new Vector2(0, 0), 0);
-
-    this.owner = owner;
-    this.frameWidth = frameWidth;
-    this.frameHeight = frameHeight;
-    this.hFrames = hFrames;
-    this.vFrames = vFrames;
-    
-    this.positionOffset = new Vector2(0, 0);
-    this.widthOffset = 0;
-    this.heightOffset = 0;
-
-    this.texture = new Image();
-    this.texture.src = imagePath;
-
-    this.animations = {};
-    this.currentAnimation = null;
-    this.currentFrameIndex = 0;
-    
-    this.isPlaying = false;
-    this.timer = 0;
-  }
-
-  addAnimation(name, frameIndices, fps = 10, loop = true) {
-    this.animations[name] = { frames: frameIndices, fps: fps, loop: loop };
-  }
-
-  play(name) {
-    if (this.currentAnimation === name && this.isPlaying) return;
-    this.currentAnimation = name;
-    this.currentFrameIndex = 0;
-    this.timer = 0;
-    this.isPlaying = true;
-  }
-
-  process(delta) {
-    if (!this.isPlaying || !this.currentAnimation) return;
-
-    const anim = this.animations[this.currentAnimation];
-    const timePerFrame = 1 / anim.fps;
-
-    this.timer += delta; 
-
-    if (this.timer >= timePerFrame) {
-      this.timer -= timePerFrame;
-      this.currentFrameIndex++;
-
-      if (this.currentFrameIndex >= anim.frames.length) {
-        if (anim.loop) {
-          this.currentFrameIndex = 0;
-        } else {
-          this.currentFrameIndex = anim.frames.length - 1;
-          this.isPlaying = false;
-        }
-      }
-    }
-  }
-
-  draw(ctx) {
-    if (!this.texture.complete || !this.currentAnimation) return;
-
-    const anim = this.animations[this.currentAnimation];
-    const actualFrame = anim.frames[this.currentFrameIndex];
-
-    const col = actualFrame % this.hFrames;
-    const row = Math.floor(actualFrame / this.hFrames);
-
-    const sourceX = col * this.frameWidth;
-    const sourceY = row * this.frameHeight;
-
-    ctx.save();
-    ctx.imageSmoothingEnabled = false;
-
-    const drawX = Math.round(this.owner.position.x);
-    const drawY = Math.round(this.owner.position.y);
-
-    ctx.translate(drawX, drawY);
-    ctx.rotate(this.owner.rotation * Math.PI / 180);
-
-    const finalWidth = this.owner.width + this.widthOffset;
-    const finalHeight = this.owner.height + this.heightOffset;
-    const destX = Math.round(-finalWidth / 2 + this.positionOffset.x);
-    const destY = Math.round(-finalHeight / 2 + this.positionOffset.y);
-
-    ctx.drawImage(
-      this.texture,
-      sourceX, sourceY, this.frameWidth, this.frameHeight, 
-      destX, destY, finalWidth, finalHeight                
-    );
-
-    ctx.restore();
   }
 }
 
