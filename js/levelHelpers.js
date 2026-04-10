@@ -11,9 +11,8 @@ async function loadLevel(levelIndex) {
   Globals.paddle.width = 100;
   Globals.paddle.isMagnetic = false;
 
-  Globals.balls[0] = new Ball(new Vector2, 0, new Vector2(0,-1));
+  Globals.balls[0] = new Ball(new Vector2, 0, new Vector2);
   Globals.balls[0].isStuck = true;
-  Globals.balls[0].stuckOffsetX = 0;
   
   // Add the ball to layer 3 so it draws over the bricks
   Globals.engine.add(Globals.balls[0], 3);

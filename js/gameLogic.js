@@ -49,7 +49,7 @@ function loadAudio() {
   Globals.audio.preload("paddle_death", "sounds/SFX/paddle/death.ogg"); // not currently used
 
   Globals.audio.preload("brick_death", "sounds/SFX/brick/death.ogg");
-  Globals.audio.preload("brick_explode", "sounds/SFX/brick/explosion.ogg"); // not currently used
+  Globals.audio.preload("brick_explode", "sounds/SFX/brick/explosion.ogg");
 
   Globals.audio.preload("ball_death", "sounds/SFX/ball/death.ogg");
   Globals.audio.preload("ball_SO_collision", "sounds/SFX/ball/soft_collision.ogg");

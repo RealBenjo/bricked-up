@@ -5,6 +5,21 @@ class GameManager extends Node {
     this.bricksCount;
     this.playerHealth = 3;
     this.currentLevelIndex = 0;
+
+    // --- DEV SHORTCUTS ---
+    window.addEventListener("keydown", (e) => {
+      // "O" for Previous Level
+      if (e.code === "KeyO") {
+        this.currentLevelIndex = Math.max(0, this.currentLevelIndex - 1);
+        loadLevel(this.currentLevelIndex);
+      }
+
+      // "P" for Next Level
+      if (e.code === "KeyP") {
+        this.currentLevelIndex++;
+        loadLevel(this.currentLevelIndex);
+      }
+    });
   }
 
   // "event" receivers
@@ -13,8 +28,7 @@ class GameManager extends Node {
     this.bricksCount--;
     
     if (this.bricksCount <= 0) {
-      // level cleared
-      // TODO: play sfx here
+      Globals.audio.playSFX("level_cleared", 0.25);
       
       this.currentLevelIndex++;
       loadLevel(this.currentLevelIndex);
@@ -198,7 +212,7 @@ class Ball extends Node2D {
     this.velocity = new Vector2();
 
     this.isStuck = false;
-    this.stuckOffsetX = 0;
+    this.stuckOffsetX = 1;
 
     this.diameter = diameter;    
     this.collider = new BoxCollider(diameter, diameter);
@@ -397,7 +411,7 @@ class Brick extends Entity2D {
     
     this.width = width;
     this.height = height;
-    this.itemChance = 0.2; 
+    this.itemChance = 0.1;
     
     // Save the color string from the JSON to the brick
     this.baseColor = color;
@@ -430,45 +444,36 @@ class Brick extends Entity2D {
   }
 
   die() {
+    // 1. PREVENT INFINITE LOOPS during chain reactions!
+    if (this.isDead) return;
+    this.isDead = true; 
+
+    // 2. TRIGGER THE STAT LOGIC BEFORE WE DELETE THE BRICK
+    if (this.stat && this.stat.onDeath) {
+      this.stat.onDeath(); 
+    }
+
+    // ... (Your existing item drop logic stays exactly the same)
     if (Math.random() > this.itemChance) {
       this.dieAndUpdate();
       return;
     }
 
-    const rarity = {
-      common: 0.65,
-      rare: 0.95,
-      epic: 0.95
-    };
-
+    const rarity = { common: 0.65, rare: 0.95, epic: 0.95 };
     const rng = Math.random();    
     let selectedPool;
 
-    if (rng <= rarity.common) {
-      selectedPool = Item.LOOT_POOLS.commonDebuffs;
-      
-    } else if (rng <= rarity.rare) {
-      selectedPool = Item.LOOT_POOLS.commonBuffs;
+    if (rng <= rarity.common) selectedPool = Item.LOOT_POOLS.commonDebuffs;
+    else if (rng <= rarity.rare) selectedPool = Item.LOOT_POOLS.commonBuffs;
+    else selectedPool = Item.LOOT_POOLS.megaBuffs;
 
-    } else {
-      selectedPool = Item.LOOT_POOLS.megaBuffs;
-
-    }
-
-    // random key from the pool we chose
     const randomKey = selectedPool[Math.floor(Math.random() * selectedPool.length)];
 
     const item = new Item(
       this.position.clone(),
       randomizeDir(new Vector2(0, -1), 90),
-      400, 
-      randomKey,
-      50,
-      40,
-      Globals.paddle,
-      Globals.engine
+      400, randomKey, 50, 40
     );
-    
     item.gravityCalc.gravity = 500;
 
     Globals.engine.add(item);

@@ -1,4 +1,8 @@
 class LevelEditor {
+  // Define how special stats look in the Editor
+  static STAT_EDITOR_CONFIG = {
+    explosive: { label: "TNT", editorColor: "#ff5500" }
+  };
   constructor(canvas) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d');
@@ -85,53 +89,78 @@ class LevelEditor {
       this.loadCurrentLevelFromMemory();
       
     } catch (error) {
-      console.error("Failed to load levels.json. Are you running a local web server?", error);
+      console.warn("Failed to load levels.json. Starting with a blank canvas.");
+      this.fullJsonData = [];
+      this.createNewLevel(); 
     }
   }
 
   loadCurrentLevelFromMemory() {
     if (!this.fullJsonData) return;
 
-    // Check if the JSON is an array of levels, or a single level object
     const levelToLoad = Array.isArray(this.fullJsonData) 
       ? this.fullJsonData[this.currentLevelIndex] 
       : this.fullJsonData;
 
     if (levelToLoad && levelToLoad.bricks) {
-      // Convert the 1-indexed coordinates back to 0-indexed for the editor
       this.bricks = levelToLoad.bricks.map(b => ({
         col: b.col - 1,
         row: b.row - 1,
         stat: b.stat,
         color: b.color
       }));
-      console.log(`Successfully loaded data for Level ${this.currentLevelIndex + 1}!`);
     } else {
-      this.bricks = []; // Clear board if level is empty
+      this.bricks = [];
     }
   }
 
   switchLevel(delta) {
-    if (!this.fullJsonData || !Array.isArray(this.fullJsonData)) {
-      console.warn("Multiple levels not loaded. Cannot switch.");
+    if (!this.fullJsonData || (!Array.isArray(this.fullJsonData) && this.fullJsonData.length <= 1)) {
+      console.warn("Multiple levels not available. Cannot switch.");
       return;
     }
 
-    // 1. Save current work to memory so it isn't lost when switching
     this.saveCurrentLevelToMemory();
 
-    // 2. Safely increment/decrement the level index (wrapping around)
     const numLevels = this.fullJsonData.length;
     this.currentLevelIndex = (this.currentLevelIndex + delta + numLevels) % numLevels;
 
-    // 3. Load the new level
     this.loadCurrentLevelFromMemory();
+  }
+
+  createNewLevel() {
+    this.saveCurrentLevelToMemory();
+
+    if (!this.fullJsonData) {
+      this.fullJsonData = [];
+    } else if (!Array.isArray(this.fullJsonData)) {
+      this.fullJsonData = [this.fullJsonData];
+    }
+
+    const newLevel = {
+      name: `Level ${this.fullJsonData.length + 1}`,
+      bricks: []
+    };
+
+    this.fullJsonData.push(newLevel);
+    this.currentLevelIndex = this.fullJsonData.length - 1;
+    this.bricks = [];
+    console.log(`Created new level! You are now on Level ${this.currentLevelIndex + 1}`);
+  }
+
+  isBrickInBounds(brick) {
+    return brick.col >= 0 && 
+           brick.col < this.maxCols && 
+           brick.row >= this.minAllowedRow && 
+           brick.row <= this.maxAllowedRow;
   }
 
   saveCurrentLevelToMemory() {
     if (!this.fullJsonData) return;
 
-    const sortedBricks = [...this.bricks].sort((a, b) => {
+    const validBricks = this.bricks.filter(b => this.isBrickInBounds(b));
+
+    const sortedBricks = [...validBricks].sort((a, b) => {
       if (a.row === b.row) return a.col - b.col;
       return a.row - b.row;
     });
@@ -142,12 +171,18 @@ class LevelEditor {
         row: b.row + 1,
         stat: b.stat
       };
-      if (b.color) brick.color = b.color;
+      
+      // Strict check: only output color if it's normal
+      if (b.stat === "normal" && b.color) {
+        brick.color = b.color;
+      }
       return brick;
     });
 
     if (Array.isArray(this.fullJsonData)) {
-      this.fullJsonData[this.currentLevelIndex].bricks = exportedBricks;
+      if (this.fullJsonData[this.currentLevelIndex]) {
+        this.fullJsonData[this.currentLevelIndex].bricks = exportedBricks;
+      }
     } else {
       this.fullJsonData.bricks = exportedBricks;
     }
@@ -176,7 +211,6 @@ class LevelEditor {
 
     const { col, row } = this.getCellFromMouse(e);
 
-    // interpolate between last cell and current
     this.paintLine(this.lastCol, this.lastRow, col, row);
 
     this.lastCol = col;
@@ -202,24 +236,28 @@ class LevelEditor {
   }
 
   // =========================
-  // PAINTING
+  // PAINTING & MOVING
   // =========================
 
   paintCell(col, row) {
-    // Prevent painting or erasing outside the defined row boundaries
-    if (row < this.minAllowedRow || row > this.maxAllowedRow) {
+    if (row < this.minAllowedRow || row > this.maxAllowedRow || col < 0 || col >= this.maxCols) {
       return; 
     }
 
     if (this.mouseButton === 0) {
       const existingIndex = this.bricks.findIndex(b => b.col === col && b.row === row);
+      const currentStat = this.stats[this.currentStatIndex];
       
       const newBrick = {
         col,
         row,
-        stat: this.stats[this.currentStatIndex],
-        color: this.colors[this.currentColorIndex]
+        stat: currentStat
       };
+
+      // ONLY assign color if it's a normal brick
+      if (currentStat === "normal") {
+        newBrick.color = this.colors[this.currentColorIndex];
+      }
 
       if (existingIndex !== -1) {
         this.bricks[existingIndex] = newBrick;
@@ -260,12 +298,30 @@ class LevelEditor {
     this.bricks = this.bricks.filter(b => b.col !== col || b.row !== row);
   }
 
+  moveLevel(dCol, dRow) {
+    this.bricks.forEach(b => {
+      b.col += dCol;
+      b.row += dRow;
+    });
+  }
+
   // =========================
   // KEYBOARD
   // =========================
 
   onKeyDown(e) {
     if (!this.isActive) return;
+
+    // Prevent default scrolling for arrow keys
+    if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) {
+      e.preventDefault();
+    }
+
+    // Move level with Arrow Keys
+    if (e.key === 'ArrowUp') this.moveLevel(0, -1);
+    if (e.key === 'ArrowDown') this.moveLevel(0, 1);
+    if (e.key === 'ArrowLeft') this.moveLevel(-1, 0);
+    if (e.key === 'ArrowRight') this.moveLevel(1, 0);
 
     // Stat Switch
     if (e.key.toLowerCase() === 'q') {
@@ -274,18 +330,23 @@ class LevelEditor {
       this.currentStatIndex = (this.currentStatIndex + 1) % this.stats.length;
     }
 
-    // Color Switch
-    if (e.key.toLowerCase() === 'a' || e.key === 'ArrowLeft') {
+    // Color Switch (Removed Arrow keys from here)
+    if (e.key.toLowerCase() === 'a') {
       this.currentColorIndex = (this.currentColorIndex - 1 + this.colors.length) % this.colors.length;
-    } else if (e.key.toLowerCase() === 'd' || e.key === 'ArrowRight') {
+    } else if (e.key.toLowerCase() === 'd') {
       this.currentColorIndex = (this.currentColorIndex + 1) % this.colors.length;
     }
 
     // Level Switch
     if (e.key.toLowerCase() === 'y') {
-      this.switchLevel(-1); // Previous Level
+      this.switchLevel(-1); 
     } else if (e.key.toLowerCase() === 'c') {
-      this.switchLevel(1);  // Next Level
+      this.switchLevel(1);  
+    }
+
+    // New Level
+    if (e.key.toLowerCase() === 'n') {
+      this.createNewLevel();
     }
 
     // Export
@@ -299,7 +360,6 @@ class LevelEditor {
   // =========================
 
   exportLevel() {
-    // Force a save to the JSON object before formatting it
     this.saveCurrentLevelToMemory();
 
     let finalOutput;
@@ -307,15 +367,15 @@ class LevelEditor {
     if (this.fullJsonData) {
       finalOutput = JSON.stringify(this.fullJsonData, null, 2);
     } else {
-      // Fallback if no file was loaded and we created from scratch
+      // Filter here just in case fallback is triggered directly
+      const validBricks = this.bricks.filter(b => this.isBrickInBounds(b));
       const singleLevel = {
         name: "Custom Editor Level",
-        bricks: this.bricks.map(b => ({ col: b.col + 1, row: b.row + 1, stat: b.stat, color: b.color }))
+        bricks: validBricks.map(b => ({ col: b.col + 1, row: b.row + 1, stat: b.stat, color: b.color }))
       };
       finalOutput = JSON.stringify(singleLevel, null, 2);
     }
 
-    // Post-process the JSON string to compress the brick objects onto a single line
     finalOutput = finalOutput.replace(/\{\s*"col":[\s\S]*?\}/g, (match) => {
       return match.replace(/\s+/g, ' ');
     });
@@ -340,12 +400,10 @@ class LevelEditor {
     // Draw restricted zones visually (Red tint)
     this.ctx.fillStyle = "rgba(255, 0, 0, 0.1)";
     
-    // Top restricted area
     if (this.minAllowedRow > 0) {
       this.ctx.fillRect(0, 0, this.canvas.width, this.minAllowedRow * this.brickHeight);
     }
     
-    // Bottom restricted area
     const bottomStartY = (this.maxAllowedRow + 1) * this.brickHeight;
     if (bottomStartY < this.canvas.height) {
       this.ctx.fillRect(0, bottomStartY, this.canvas.width, this.canvas.height - bottomStartY);
@@ -368,17 +426,60 @@ class LevelEditor {
     this.ctx.stroke();
 
     // Bricks
+    // Bricks
     this.bricks.forEach(b => {
-      const color = BrickStat.Colors[b.color] || "white";
-      this.ctx.fillStyle = color;
-
       const x = b.col * this.brickWidth;
       const y = b.row * this.brickHeight;
 
-      this.ctx.fillRect(x, y, this.brickWidth, this.brickHeight);
-      this.ctx.strokeStyle = "white";
-      this.ctx.strokeRect(x, y, this.brickWidth, this.brickHeight);
+      let drawColor = "#333"; 
+      let label = "";
+
+      // Determine color and label based on stat
+      if (b.stat === "normal") {
+        drawColor = BrickStat.Colors[b.color] || "white";
+      } else {
+        const config = LevelEditor.STAT_EDITOR_CONFIG[b.stat];
+        
+        // Fallback just in case you add a stat but forget to add it to the config
+        drawColor = config ? config.editorColor : "#ff00ff"; 
+        label = config ? config.label : b.stat.substring(0, 3).toUpperCase();
+      }
+
+      if (!this.isBrickInBounds(b)) {
+        // Hollowed out style
+        this.ctx.strokeStyle = drawColor;
+        this.ctx.lineWidth = 2;
+        this.ctx.strokeRect(x + 2, y + 2, this.brickWidth - 4, this.brickHeight - 4);
+        this.ctx.lineWidth = 1; 
+      } else {
+        // Normal filled style
+        this.ctx.fillStyle = drawColor;
+        this.ctx.fillRect(x, y, this.brickWidth, this.brickHeight);
+        this.ctx.strokeStyle = "white";
+        this.ctx.strokeRect(x, y, this.brickWidth, this.brickHeight);
+
+        // Draw custom text for special stats
+        if (label) {
+          this.ctx.fillStyle = "white";
+          this.ctx.font = "bold 10px monospace";
+          this.ctx.textAlign = "center";
+          this.ctx.textBaseline = "middle";
+          
+          // Add a tiny drop shadow to text so it's readable on bright editorColors
+          this.ctx.shadowColor = "black";
+          this.ctx.shadowBlur = 2;
+          
+          this.ctx.fillText(label, x + (this.brickWidth / 2), y + (this.brickHeight / 2));
+          
+          // Reset shadow so it doesn't mess up the rest of the UI
+          this.ctx.shadowBlur = 0; 
+        }
+      }
     });
+    
+    // Reset alignment before drawing UI so the bottom text doesn't break
+    this.ctx.textAlign = "left";
+    this.ctx.textBaseline = "alphabetic";
 
     this.drawUI();
 
@@ -390,21 +491,20 @@ class LevelEditor {
     this.ctx.fillRect(0, this.canvas.height - 60, this.canvas.width, 60);
 
     this.ctx.fillStyle = "white";
-    this.ctx.font = "16px monospace";
+    this.ctx.font = "14px monospace"; 
 
-    this.ctx.fillText(`[Drag LMB]: Paint   [Drag RMB]: Erase   [Enter]: Export   [Y/C]: Switch Level`, 20, this.canvas.height - 35);
+    this.ctx.fillText(`[Drag]: Paint/Erase  [Arrows]: Move Level  [Y/C]: Switch  [N]: New  [Enter]: Export`, 20, this.canvas.height - 35);
 
     const currColor = this.colors[this.currentColorIndex];
     const currStat = this.stats[this.currentStatIndex];
 
     this.ctx.fillText(`Color: `, 20, this.canvas.height - 15);
     this.ctx.fillStyle = BrickStat.Colors[currColor] || "white";
-    this.ctx.fillText(currColor, 80, this.canvas.height - 15);
+    this.ctx.fillText(currColor, 75, this.canvas.height - 15);
 
     this.ctx.fillStyle = "white";
-    this.ctx.fillText(`Stat: ${currStat}`, 200, this.canvas.height - 15);
+    this.ctx.fillText(`Stat: ${currStat}`, 190, this.canvas.height - 15);
 
-    // Display the current level number (1-indexed for readability)
     if (Array.isArray(this.fullJsonData)) {
       this.ctx.fillText(`Level: ${this.currentLevelIndex + 1}/${this.fullJsonData.length}`, 360, this.canvas.height - 15);
     }
