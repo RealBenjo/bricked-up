@@ -397,7 +397,7 @@ class Brick extends Entity2D {
     
     this.width = width;
     this.height = height;
-    this.itemChance = 1.0; 
+    this.itemChance = 0.2; 
     
     // Save the color string from the JSON to the brick
     this.baseColor = color;
