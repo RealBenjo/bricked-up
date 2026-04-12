@@ -1,0 +1,4 @@
+body {
+  color: var(--primary-site-color);
+  background-color: var(--primary-bg-color);
+}

@@ -4,22 +4,38 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <link rel="icon" href="images/icon/favicon.png">
   <link rel="stylesheet" href="css/classes.css">
   <link rel="stylesheet" href="css/style.css">
   <title>Bricked UP</title>
 </head>
 
 <body>
-  <div id="main" class="h_centered centered_content col_dir">
-    <div id="header">
-      <p>funny guy :)</p>
+  <div id="main" class="main-container">
+    <div class="header centered-content">
+      <h1>BRICKED UP</h1>
     </div>
-    <div id="game_container">
-      <div class="border">
-        <canvas id="canvas" width="1000" height="700"></canvas>
+
+    <div class="content-wrapper">
+      <div class="game-section">
+        <div class="highlight-bg border">
+          <canvas id="canvas" width="1000" height="700"></canvas>
+        </div>
+      </div>
+
+      <div class="description-section">
+        <div class="description-section smooth-box">
+          <h2 class="centered-content">About the Game</h2>
+          <div class="description-content">
+            In Bricked UP your goal is to destroy <b>ALL</b> of the bricks. You also must <b>NOT</b> lose your balls.
+          </div>
+        </div>
+
+        <div class="button-container centered-content">
+          <button class="button smooth-box big-text" onclick="toggleEditor()">LEVEL EDITOR</button>
+        </div>
       </div>
     </div>
-    <button onclick="toggleEditor()">level editor</button>
   </div>
 
   <script src="js/gameEngine.js"></script>

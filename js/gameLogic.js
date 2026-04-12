@@ -9,8 +9,8 @@ const Globals = {
   balls: [], // <-- This must be an empty array, not null!
 };
 
-Globals.input = new InputManager();
 Globals.engine = new Engine("canvas");
+Globals.input = new InputManager();
 
 const Viewport = {
   w: Globals.engine.canvas.width,
@@ -46,14 +46,13 @@ function init() {
 function loadAudio() {
   // load all SFX and name them
   Globals.audio.preload("paddle_laser", "sounds/SFX/paddle/laser_shoot.ogg"); // not currently used
-  Globals.audio.preload("paddle_death", "sounds/SFX/paddle/death.ogg"); // not currently used
+  Globals.audio.preload("paddle_magnet", "sounds/SFX/paddle/magnet.ogg"); // not currently used
 
   Globals.audio.preload("brick_death", "sounds/SFX/brick/death.ogg");
   Globals.audio.preload("brick_explode", "sounds/SFX/brick/explosion.ogg");
 
   Globals.audio.preload("ball_death", "sounds/SFX/ball/death.ogg");
   Globals.audio.preload("ball_SO_collision", "sounds/SFX/ball/soft_collision.ogg");
-  Globals.audio.preload("ball_HA_collision", "sounds/SFX/ball/hard_collision.ogg"); // not currently used
 
   // will add specific sound effects for specific items
   Globals.audio.preload("item_buff", "sounds/SFX/item/buff.ogg");

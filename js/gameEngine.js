@@ -83,9 +83,11 @@ class Engine {
 
 class InputManager {
   constructor() {
+    // Pass the canvas in, or fall back to Globals if it's already initialized
+    this.canvas = Globals.engine.canvas; 
+    
     this.mousePosition = new Vector2(0, 0);
 
-    // Sets are perfect for inputs! They only store unique values.
     this._keysDown = new Set();
     this._buttonsDown = new Set();
 
@@ -93,45 +95,65 @@ class InputManager {
   }
 
   _setupListeners() {
-    // --- KEYBOARD ---
-    window.addEventListener("keydown", (e) => this._keysDown.add(e.code));
-    window.addEventListener("keyup", (e) => this._keysDown.delete(e.code));
+    if (!this.canvas) {
+      console.error("InputManager: I need a canvas to attach to!");
+      return;
+    }
 
-    // --- MOUSE ---
+    // 1. CRITICAL: Make the canvas focusable so it can hear keyboard events
+    this.canvas.setAttribute("tabindex", "0");
+    
+    // Optional: Remove the default browser highlight ring when clicked
+    this.canvas.style.outline = "none";
+
+    // 2. Auto-focus the canvas when the player clicks it so keys work immediately
+    this.canvas.addEventListener("mousedown", () => this.canvas.focus());
+
+    // --- KEYBOARD (Canvas Only) ---
+    this.canvas.addEventListener("keydown", (e) => {
+      this._keysDown.add(e.code);
+      
+      // Prevent default browser scrolling when playing the game
+      if (["Space", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.code)) {
+        e.preventDefault();
+      }
+    });
+    
+    this.canvas.addEventListener("keyup", (e) => this._keysDown.delete(e.code));
+
+    // Safety: If they click off the game, clear inputs so keys don't get "stuck"
+    this.canvas.addEventListener("blur", () => this._keysDown.clear());
+
+    // --- MOUSE (Canvas Only) ---
     const mouseEvents = ["mousemove", "mousedown", "mouseup", "contextmenu"];
     mouseEvents.forEach(type => {
-      window.addEventListener(type, (e) => this._handleMouseEvent(e));
+      this.canvas.addEventListener(type, (e) => this._handleMouseEvent(e));
     });
+
+    // Safety: If the mouse leaves the canvas, clear buttons so clicks don't get "stuck"
+    this.canvas.addEventListener("mouseleave", () => this._buttonsDown.clear());
   }
 
   _handleMouseEvent(e) {
-    // Optional: Stop the right-click menu from popping up over your game
     if (e.type === "contextmenu") e.preventDefault();
 
-    // 1. Update Mouse Position (Relative to canvas)
-    if (Globals.engine && Globals.engine.canvas) {
-      const rect = Globals.engine.canvas.getBoundingClientRect();
-      this.mousePosition.x = e.clientX - rect.left;
-      this.mousePosition.y = e.clientY - rect.top;
-    }
+    const rect = this.canvas.getBoundingClientRect();
+    this.mousePosition.x = e.clientX - rect.left;
+    this.mousePosition.y = e.clientY - rect.top;
 
-    // 2. Update Mouse Buttons (0 = Left, 1 = Middle, 2 = Right)
     if (e.type === "mousedown") this._buttonsDown.add(e.button);
     if (e.type === "mouseup") this._buttonsDown.delete(e.button);
   }
 
   isKeyDown(keyCode) {
-    // Example: Input.isKeyDown("Space") or Input.isKeyDown("KeyW")
     return this._keysDown.has(keyCode);
   }
 
   isMouseButtonDown(buttonCode) {
-    // Example: Input.isMouseButtonDown(0) for Left Click
     return this._buttonsDown.has(buttonCode);
   }
 
   getMousePos() {
-    // Returns a clone so other scripts don't accidentally modify the true position
     return this.mousePosition.clone();
   }
 }

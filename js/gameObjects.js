@@ -191,10 +191,18 @@ class Item extends Node2D {
 }
 
 class WorldBorder extends Node2D {
-  constructor(position = new Vector2(), width = 800, height = 600) {
+  // Added a color parameter with a default value
+  constructor(position = new Vector2(), width = 800, height = 600, color = "#2f2f2f") {
     super(position, 0);
     this.width = width;
     this.height = height;
+    
+    this.renderer = new CanvasItem(this, (ctx) => {
+      ctx.fillRect(-this.width / 2, -this.height / 2, this.width, this.height);
+    });
+    
+    // Set the Godot-style modulate property to apply our solid color
+    this.renderer.modulate = color;
     
     this.collider = new BoxCollider(width, height, true);
   }
@@ -325,6 +333,7 @@ class Paddle extends Node2D {
     this._height = height;
 
     this.isMagnetic = false;
+    this.wasBallStuck = false;
 
     this.targetX = position.x;
 
@@ -351,7 +360,6 @@ class Paddle extends Node2D {
       this.collider.width = this._width;
     }
   }
-
   get width() {
     return this._width;
   }
@@ -362,31 +370,31 @@ class Paddle extends Node2D {
        this.collider.height = value;
     }
   }
-
   get height() {
     return this._height;
   }
 
 
   process(delta) {
-    // --- code from here is ass -------------------
-    var isBallStuck = false;
+    let isBallStuck = Globals.balls.some(ball => ball.isStuck);
 
-    Globals.balls.forEach(ball => {
-      if (ball.isStuck) {
-        isBallStuck = true;
-      }
-    });
-
+    // 2. Handle animations and sounds
     if (isBallStuck) {
       this.renderer.play("magnet");
-    } else if (!isBallStuck) {
+      
+      // ONLY play the sound if it is stuck NOW, but WAS NOT stuck last frame!
+      if (!this.wasBallStuck) {
+        Globals.audio.playSFX("paddle_magnet", 0.2);
+      }
+    } else {
       this.renderer.play("normal");
     }
-    // --- code to here is ass ---------------------
+
+    // 3. Save the current state for the NEXT frame to check against
+    this.wasBallStuck = isBallStuck;
+
 
     this.targetX = Globals.input.mousePosition.x;
-
     this.position.x += this.targetX - this.position.x;
 
     const halfWidth = this.width / 2;
@@ -396,9 +404,7 @@ class Paddle extends Node2D {
     if (this.position.x > canvasWidth - halfWidth) this.position.x = canvasWidth - halfWidth;
   
     // runs the renderer's process
-    if (this.renderer && this.renderer.process) {
-      this.renderer.process(delta);
-    }
+    this.renderer.process(delta);
   }
 }
 
