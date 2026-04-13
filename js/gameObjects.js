@@ -4,22 +4,43 @@ class GameManager extends Node {
     this.ballsCount = Globals.balls.length;
     this.bricksCount;
     this.playerHealth = 3;
+    this.lifeImages = [];
     this.currentLevelIndex = 0;
 
     // --- DEV SHORTCUTS ---
     window.addEventListener("keydown", (e) => {
-      // "O" for Previous Level
       if (e.code === "KeyO") {
         this.currentLevelIndex = Math.max(0, this.currentLevelIndex - 1);
         loadLevel(this.currentLevelIndex);
       }
-
-      // "P" for Next Level
       if (e.code === "KeyP") {
         this.currentLevelIndex++;
         loadLevel(this.currentLevelIndex);
       }
     });
+  }
+
+  ready() {
+    this.updateHealthUI();
+  }
+
+  // --- NEW UI FUNCTION ---
+  updateHealthUI() {
+    // 1. Erase all existing life icons from the screen
+    this.lifeImages.forEach(img => img.queueFree());
+    this.lifeImages = [];
+
+    // 2. Spawn new icons matching the exact current playerHealth
+    for (let i = 0; i < this.playerHealth; i++) {
+      const xPos = Globals.engine.canvas.width - 40 - (i * 40); 
+      const yPos = 20; // 20 pixels from the top
+
+      const lifeNode = new LifeImg(new Vector2(xPos, yPos));
+      
+      this.lifeImages.push(lifeNode);
+      // Add to layer 4 so it sits on top of the game objects
+      Globals.engine.add(lifeNode, 4); 
+    }
   }
 
   // "event" receivers
@@ -36,13 +57,14 @@ class GameManager extends Node {
   }
 
   onBallLost() {
-    // this now gets an accurate count of balls
     this.ballsCount = Globals.balls.length-1;
     
     // Lose life condition!
     if (this.ballsCount <= 0) {
       this.playerHealth--;
-      // TODO: show the player health
+      
+      // FIX: Update the visual health here!
+      this.updateHealthUI();
 
       Globals.balls = [
         Object.assign(
@@ -52,8 +74,13 @@ class GameManager extends Node {
       ];
       Globals.engine.add(Globals.balls[0], 3);
       
+      // Game Over check
       if (this.playerHealth <= 0) {
         this.playerHealth = 3;
+        
+        // FIX: Reset the visual health for the new game!
+        this.updateHealthUI();
+        
         Globals.audio.playSFX("game_over", 0.2);
         loadLevel(0);
       }
@@ -66,6 +93,14 @@ class GameManager extends Node {
 
   process(delta) {
     
+  }
+}
+
+class LifeImg extends Node2D {
+  constructor(position = new Vector2) {
+    super(position, 0);
+
+    this.renderer = new Sprite2D(this, "images/icon/life.png", 30, 5)
   }
 }
 

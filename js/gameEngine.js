@@ -295,6 +295,9 @@ class Sprite2D extends CanvasItem {
         this._lastModulate = this.modulate;
       }
 
+      // 1. DISABLE ANTI-ALIASING ON THE MAIN CANVAS
+      ctx.imageSmoothingEnabled = false;
+
       const renderSource = this.tintedCache || this.texture;
 
       ctx.drawImage(
@@ -318,6 +321,9 @@ class Sprite2D extends CanvasItem {
     offscreen.width = this.texture.width || this.width;
     offscreen.height = this.texture.height || this.height;
     const oCtx = offscreen.getContext("2d");
+
+    // 2. DISABLE ANTI-ALIASING ON THE HIDDEN TINT CACHE
+    oCtx.imageSmoothingEnabled = false;
 
     oCtx.drawImage(this.texture, 0, 0, offscreen.width, offscreen.height);
     oCtx.globalCompositeOperation = "multiply";
