@@ -26,7 +26,6 @@ class GameManager extends Node {
 
   // --- NEW UI FUNCTION ---
   updateHealthUI() {
-    // 1. Erase all existing life icons from the screen
     this.lifeImages.forEach(img => img.queueFree());
     this.lifeImages = [];
 
@@ -39,7 +38,7 @@ class GameManager extends Node {
       
       this.lifeImages.push(lifeNode);
       // Add to layer 4 so it sits on top of the game objects
-      Globals.engine.add(lifeNode, 4); 
+      Globals.engine.add(lifeNode, 5); 
     }
   }
 
@@ -72,7 +71,7 @@ class GameManager extends Node {
           { isStuck: true }
         )
       ];
-      Globals.engine.add(Globals.balls[0], 3);
+      Globals.engine.add(Globals.balls[0], 2);
       
       // Game Over check
       if (this.playerHealth <= 0) {
@@ -211,7 +210,7 @@ class Item extends Node2D {
           )
 
           Globals.balls.push(newBall);
-          Globals.engine.add(newBall);
+          Globals.engine.add(newBall, 2);
 
           Globals.audio.playSFX("item_buff", 0.1);
         }
