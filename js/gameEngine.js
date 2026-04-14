@@ -15,7 +15,7 @@ class Engine {
   }
 
   _loop(timestamp) {
-    // NEW: If the engine is paused, just wait for the next frame and skip everything else.
+    // If the engine is paused, just wait for the next frame and skip everything else.
     if (!this.isRunning) {
       this.lastTime = timestamp; // Keep time updated so things don't teleport when unpaused
       requestAnimationFrame((t) => this._loop(t));

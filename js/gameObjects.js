@@ -3,7 +3,7 @@ class GameManager extends Node {
     super(); 
     this.ballsCount = Globals.balls.length;
     this.bricksCount;
-    this.playerHealth = 3;
+    this._playerHealth = 3;
     this.lifeImages = [];
     this.currentLevelIndex = 0;
 
@@ -24,13 +24,28 @@ class GameManager extends Node {
     this.updateHealthUI();
   }
 
+  set playerHealth(value) {
+    this._playerHealth = value;
+    // Game Over check
+    if (this.playerHealth <= 0) {
+      this.playerHealth = 3;
+      
+      Globals.audio.playSFX("game_over", 0.2);
+      loadLevel(0);
+    }
+    this.updateHealthUI();
+  }
+  get playerHealth() {
+    return this._playerHealth;
+  }
+
   // --- NEW UI FUNCTION ---
   updateHealthUI() {
     this.lifeImages.forEach(img => img.queueFree());
     this.lifeImages = [];
 
     // 2. Spawn new icons matching the exact current playerHealth
-    for (let i = 0; i < this.playerHealth; i++) {
+    for (let i = 0; i < this._playerHealth; i++) {
       const xPos = Globals.engine.canvas.width - 40 - (i * 40); 
       const yPos = 20; // 20 pixels from the top
 
@@ -61,9 +76,6 @@ class GameManager extends Node {
     // Lose life condition!
     if (this.ballsCount <= 0) {
       this.playerHealth--;
-      
-      // FIX: Update the visual health here!
-      this.updateHealthUI();
 
       Globals.balls = [
         Object.assign(
@@ -72,17 +84,6 @@ class GameManager extends Node {
         )
       ];
       Globals.engine.add(Globals.balls[0], 3);
-      
-      // Game Over check
-      if (this.playerHealth <= 0) {
-        this.playerHealth = 3;
-        
-        // FIX: Reset the visual health for the new game!
-        this.updateHealthUI();
-        
-        Globals.audio.playSFX("game_over", 0.2);
-        loadLevel(0);
-      }
     }
   }
 
@@ -119,8 +120,8 @@ class Item extends Node2D {
     M_WIDTH: { type: "width", value: -100, imgPath: "images/items/debuffs/minus_size.png" },
     P_MAGNETIC: { type: "magnet", value: true, imgPath: "images/items/buffs/plus_magnet.png" },
     P_BALL: { type: "multiball", value: 1, imgPath: "images/items/buffs/plus_ball.png" },
-    P_HEALTH: { type: "health", value: 1, imgPath: "images/items/default.png" }, // TODO: naredi real sliko
-    M_HEALTH: { type: "health", value: -1, imgPath: "images/items/default.png" } // TODO: naredi real sliko
+    P_HEALTH: { type: "health", value: 1, imgPath: "images/items/buffs/plus_health.png" },
+    M_HEALTH: { type: "health", value: -1, imgPath: "images/items/debuffs/minus_health.png" }
   };
 
   constructor(
@@ -225,7 +226,10 @@ class Item extends Node2D {
 
       case "health":
         Globals.gameManager.playerHealth += data.value;
-        Globals.audio.playSFX("item_buff", 0.1);
+
+        if (data.value > 0) Globals.audio.playSFX("item_buff", 0.1);
+        else Globals.audio.playSFX("item_debuff", 1.0);
+
         break;
     }
   }
@@ -505,8 +509,7 @@ class Brick extends Entity2D {
     
     this.healthComponent = new HealthComponent(
       health,
-      () => this.die(),
-      () => this.checkColor()
+      () => this.die()
     );
 
     if (statType && StatRegistry[statType]) {
@@ -537,13 +540,12 @@ class Brick extends Entity2D {
       this.stat.onDeath(); 
     }
 
-    // ... (Your existing item drop logic stays exactly the same)
     if (Math.random() > this.itemChance) {
       this.dieAndUpdate();
       return;
     }
 
-    const rarity = { common: 0.65, rare: 0.75, epic: 0.95 };
+    const rarity = { common: 0.65, rare: 0.75, epic: 0.85 };
     const rng = Math.random();
     let selectedPool;
 
