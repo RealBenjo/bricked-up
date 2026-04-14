@@ -1,10 +1,10 @@
-function resolveBoxCollision(mover, target) {
-  if (!target.collider || !mover.collider) return false;
+// We added a third parameter. If true, it just calculates the math but doesn't move the ball yet!
+function resolveBoxCollision(mover, target, returnDataOnly = false) {
+  if (!target.collider || !mover.collider) return returnDataOnly ? null : false;
 
   const dx = mover.position.x - target.position.x;
   const dy = mover.position.y - target.position.y;
 
-  // Combine the sizes of BOTH boxes (Minkowski Sum)
   const combinedHalfW = (target.collider.width / 2) + (mover.collider.width / 2);
   const combinedHalfH = (target.collider.height / 2) + (mover.collider.height / 2);
 
@@ -18,31 +18,31 @@ function resolveBoxCollision(mover, target) {
     let newDx = dx;
     let newDy = dy;
 
-    // Use subtraction here because we are trapped INSIDE the bounds
     const innerHalfW = (target.collider.width / 2) - (mover.collider.width / 2);
     const innerHalfH = (target.collider.height / 2) - (mover.collider.height / 2);
 
-    if (dx > innerHalfW) {
-      newDx = innerHalfW; normalX = -1; bounced = true;
-    } else if (dx < -innerHalfW) {
-      newDx = -innerHalfW; normalX = 1; bounced = true;
-    }
+    if (dx > innerHalfW) { newDx = innerHalfW; normalX = -1; bounced = true; } 
+    else if (dx < -innerHalfW) { newDx = -innerHalfW; normalX = 1; bounced = true; }
 
-    if (dy > innerHalfH) {
-      newDy = innerHalfH; normalY = -1; bounced = true;
-    } else if (dy < -innerHalfH) {
-      newDy = -innerHalfH; normalY = 1; bounced = true;
-    }
+    if (dy > innerHalfH) { newDy = innerHalfH; normalY = -1; bounced = true; } 
+    else if (dy < -innerHalfH) { newDy = -innerHalfH; normalY = 1; bounced = true; }
 
     if (bounced) {
-      mover.position.x = target.position.x + newDx;
-      mover.position.y = target.position.y + newDy;
+      const shiftX = (target.position.x + newDx) - mover.position.x;
+      const shiftY = (target.position.y + newDy) - mover.position.y;
+
+      // NEW: Return the math without applying it
+      if (returnDataOnly) {
+        return { target, normalX, normalY, shiftX, shiftY, penetration: Math.abs(shiftX) + Math.abs(shiftY) };
+      }
+
+      mover.position.x += shiftX;
+      mover.position.y += shiftY;
 
       const dot = (mover.velocity.x * normalX) + (mover.velocity.y * normalY);
       if (dot < 0) {
         mover.velocity.x -= 2 * dot * normalX;
         mover.velocity.y -= 2 * dot * normalY;
-        
         if (mover.direction) {
           mover.direction.x = mover.velocity.x;
           mover.direction.y = mover.velocity.y;
@@ -51,17 +51,13 @@ function resolveBoxCollision(mover, target) {
       }
       return true; 
     }
-    return false;
+    return returnDataOnly ? null : false;
   }
 
   // ==========================================
   // STANDARD COLLISION (PADDLE / BRICKS)
   // ==========================================
-  
-  // Pure box overlap check
   if (Math.abs(dx) < combinedHalfW && Math.abs(dy) < combinedHalfH) {
-    
-    // Calculate how deep we are inside the box on both axes
     const penX = combinedHalfW - Math.abs(dx);
     const penY = combinedHalfH - Math.abs(dy);
 
@@ -69,22 +65,28 @@ function resolveBoxCollision(mover, target) {
     let normalY = 0;
     let penetration = 0;
 
-    // Resolve on the axis with the LEAST penetration (shortest path out)
     if (penX < penY) {
-      normalX = dx >= 0 ? 1 : -1; // Push left or right
+      normalX = dx >= 0 ? 1 : -1;
       penetration = penX;
     } else {
-      normalY = dy >= 0 ? 1 : -1; // Push up or down
+      normalY = dy >= 0 ? 1 : -1;
       penetration = penY;
     }
 
-    // Push the mover out of the wall
+    // NEW: Return the math without applying it
+    if (returnDataOnly) {
+      return { 
+        target, normalX, normalY, penetration, 
+        shiftX: normalX * penetration, 
+        shiftY: normalY * penetration 
+      };
+    }
+
+    // Old eager resolution (Keeps Item drops working perfectly!)
     mover.position.x += normalX * penetration;
     mover.position.y += normalY * penetration;
 
-    // Bounce the velocity
     const dot = (mover.velocity.x * normalX) + (mover.velocity.y * normalY);
-
     if (dot < 0) {
       mover.velocity.x -= 2 * dot * normalX;
       mover.velocity.y -= 2 * dot * normalY;
@@ -98,7 +100,7 @@ function resolveBoxCollision(mover, target) {
     return true; 
   }
   
-  return false; 
+  return returnDataOnly ? null : false; 
 }
 
 

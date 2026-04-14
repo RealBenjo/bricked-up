@@ -71,7 +71,7 @@ class GameManager extends Node {
           { isStuck: true }
         )
       ];
-      Globals.engine.add(Globals.balls[0], 2);
+      Globals.engine.add(Globals.balls[0], 3);
       
       // Game Over check
       if (this.playerHealth <= 0) {
@@ -108,7 +108,8 @@ class Item extends Node2D {
   static LOOT_POOLS = {
     commonBuffs: ["P_SPEED", "P_WIDTH"],
     commonDebuffs: ["M_SPEED", "M_WIDTH"],
-    megaBuffs: ["P_MAGNETIC", "P_BALL"]
+    megaBuffs: ["P_MAGNETIC", "P_BALL", "P_HEALTH"],
+    megaDebuffs: ["M_HEALTH"]
   };
 
   static UPGRADES = {
@@ -117,9 +118,9 @@ class Item extends Node2D {
     P_WIDTH: { type: "width", value: 100, imgPath: "images/items/buffs/plus_size.png" },
     M_WIDTH: { type: "width", value: -100, imgPath: "images/items/debuffs/minus_size.png" },
     P_MAGNETIC: { type: "magnet", value: true, imgPath: "images/items/buffs/plus_magnet.png" },
-    //P_FIREBALL: { type: "fireball", value: true },
-    //M_FIREBALL: { type: "fireball", value: false },
-    P_BALL: { type: "multiball", value: 1, imgPath: "images/items/buffs/plus_ball.png" }
+    P_BALL: { type: "multiball", value: 1, imgPath: "images/items/buffs/plus_ball.png" },
+    P_HEALTH: { type: "health", value: 1, imgPath: "images/items/default.png" }, // TODO: naredi real sliko
+    M_HEALTH: { type: "health", value: -1, imgPath: "images/items/default.png" } // TODO: naredi real sliko
   };
 
   constructor(
@@ -210,7 +211,7 @@ class Item extends Node2D {
           )
 
           Globals.balls.push(newBall);
-          Globals.engine.add(newBall, 2);
+          Globals.engine.add(newBall, 3);
 
           Globals.audio.playSFX("item_buff", 0.1);
         }
@@ -220,6 +221,12 @@ class Item extends Node2D {
         Globals.paddle.isMagnetic = data.value;
 
         Globals.audio.playSFX("item_buff", 0.1);
+        break;
+
+      case "health":
+        Globals.gameManager.playerHealth += data.value;
+        Globals.audio.playSFX("item_buff", 0.1);
+        break;
     }
   }
 }
@@ -318,35 +325,72 @@ class Ball extends Node2D {
     for (let i = 0; i < steps; i++) {
       this.position = this.position.add(stepVelocity);
       
+      // --- THE GATHER PHASE ---
+      let hits = [];
       for (const collider of colliders) {
-        const didHit = resolveBoxCollision(this, collider);
+        // We pass 'true' so it ONLY gives us the data, it doesn't move the ball!
+        const hitData = resolveBoxCollision(this, collider, true);
+        if (hitData) hits.push(hitData);
+      }
+
+      // --- THE RESOLVE PHASE ---
+      if (hits.length > 0) {
+        Globals.audio.playSFX("ball_SO_collision", 0.05);
+
+        // Sort hits by penetration to find the "deepest" hit.
+        hits.sort((a, b) => b.penetration - a.penetration);
         
-        if (didHit) {
-          Globals.audio.playSFX("ball_SO_collision", 0.05);
+        // Grab ONLY the very first one!
+        const primaryHit = hits[0]; 
+
+        // 1. Physically push the ball out of the wall
+        this.position.x += primaryHit.shiftX;
+        this.position.y += primaryHit.shiftY;
+
+        // 2. Bounce the velocity
+        const dot = (this.velocity.x * primaryHit.normalX) + (this.velocity.y * primaryHit.normalY);
+        if (dot < 0) {
+          this.velocity.x -= 2 * dot * primaryHit.normalX;
+          this.velocity.y -= 2 * dot * primaryHit.normalY;
           
           stepVelocity.x = this.velocity.x / steps;
           stepVelocity.y = this.velocity.y / steps;
 
-          if (collider.isBrick && collider.healthComponent) {
-            collider.healthComponent.takeDamage(1);
-
-          } else if (collider === Globals.paddle) {          
-            if (Globals.paddle.isMagnetic) {
-              this.isStuck = true;
-              this.stuckOffsetX = this.position.x - Globals.paddle.position.x;
-              break;
-            }
-
-            const hitDistance = this.position.x - Globals.paddle.position.x;
-            const maxDist = Globals.paddle.width / 2; 
-            const normalizedHit = Math.max(-1, Math.min(1, hitDistance / maxDist));
-            
-            const angle = 80; // allowed angle from the normal of the paddle
-            const bounceAngle = -90 + (normalizedHit * angle);
-
-            this.direction = degToDir(bounceAngle);
-            this.velocity = this.direction.multiply(this.speed * delta);
+          if (this.direction) {
+            this.direction.x = this.velocity.x;
+            this.direction.y = this.velocity.y;
+            this.direction.normalize();
           }
+        }
+
+        // ==========================================
+        // 3. APPLY GAME LOGIC *ONLY* TO THE PRIMARY HIT
+        // ==========================================
+        const collider = primaryHit.target;
+
+        if (collider.isBrick && collider.healthComponent) {
+          // Now it will strictly only damage 1 brick per collision event!
+          collider.healthComponent.takeDamage(1);
+
+        } else if (collider === Globals.paddle) {          
+          if (Globals.paddle.isMagnetic) {
+            this.isStuck = true;
+            this.stuckOffsetX = this.position.x - Globals.paddle.position.x;
+            break; 
+          }
+
+          const hitDistance = this.position.x - Globals.paddle.position.x;
+          const maxDist = Globals.paddle.width / 2; 
+          const normalizedHit = Math.max(-1, Math.min(1, hitDistance / maxDist));
+          
+          const angle = 80; 
+          const bounceAngle = -90 + (normalizedHit * angle);
+
+          this.direction = degToDir(bounceAngle);
+          this.velocity = this.direction.multiply(this.speed * delta);
+          
+          stepVelocity.x = this.velocity.x / steps;
+          stepVelocity.y = this.velocity.y / steps;
         }
       }
 
@@ -499,12 +543,13 @@ class Brick extends Entity2D {
       return;
     }
 
-    const rarity = { common: 0.65, rare: 0.95, epic: 0.95 };
-    const rng = Math.random();    
+    const rarity = { common: 0.65, rare: 0.75, epic: 0.95 };
+    const rng = Math.random();
     let selectedPool;
 
     if (rng <= rarity.common) selectedPool = Item.LOOT_POOLS.commonDebuffs;
     else if (rng <= rarity.rare) selectedPool = Item.LOOT_POOLS.commonBuffs;
+    else if (rng <= rarity.epic) selectedPool = Item.LOOT_POOLS.megaDebuffs;
     else selectedPool = Item.LOOT_POOLS.megaBuffs;
 
     const randomKey = selectedPool[Math.floor(Math.random() * selectedPool.length)];
