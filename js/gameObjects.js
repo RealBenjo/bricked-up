@@ -39,7 +39,6 @@ class GameManager extends Node {
     return this._playerHealth;
   }
 
-  // --- NEW UI FUNCTION ---
   updateHealthUI() {
     this.lifeImages.forEach(img => img.queueFree());
     this.lifeImages = [];
@@ -52,7 +51,6 @@ class GameManager extends Node {
       const lifeNode = new LifeImg(new Vector2(xPos, yPos));
       
       this.lifeImages.push(lifeNode);
-      // Add to layer 4 so it sits on top of the game objects
       Globals.engine.add(lifeNode, 5); 
     }
   }
