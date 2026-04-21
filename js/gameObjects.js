@@ -69,19 +69,25 @@ class GameManager extends Node {
   }
 
   onBallLost() {
-    this.ballsCount = Globals.balls.length-1;
+    this.ballsCount = Globals.balls.length - 1;
     
     // Lose life condition!
     if (this.ballsCount <= 0) {
-      this.playerHealth--;
+      // This will trigger the setter. If health drops to 0, loadLevel(0) runs here.
+      this.playerHealth--; 
 
-      Globals.balls = [
-        Object.assign(
-          new Ball(Globals.paddle.position.clone(), 0, new Vector2(0, -1), 500, 20),
-          { isStuck: true }
-        )
-      ];
-      Globals.engine.add(Globals.balls[0], 3);
+      // ONLY spawn a new ball if the player actually survived the health drop!
+      // If health is 0 (or was reset to 3 by the game over), we skip this 
+      // because loadLevel already gave us a new ball.
+      if (this.playerHealth > 0 && this.playerHealth < 3) {
+        Globals.balls = [
+          Object.assign(
+            new Ball(Globals.paddle.position.clone(), 0, new Vector2(0, -1), 500, 20),
+            { isStuck: true }
+          )
+        ];
+        Globals.engine.add(Globals.balls[0], 3);
+      }
     }
   }
 
