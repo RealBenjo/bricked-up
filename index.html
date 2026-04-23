@@ -7,42 +7,28 @@
   <link rel="icon" href="images/icon/favicon.png">
   <link rel="stylesheet" href="css/classes.css">
   <link rel="stylesheet" href="css/style.css">
+
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <script src="js/swals.js"></script>
   <title>Bricked UP</title>
 </head>
 
 <body>
   <div id="main" class="main-container">
-    <div class="header centered-content">
+    <div class="header centered-content boring-element">
       <h1>BRICKED UP</h1>
     </div>
 
-    <div class="content-wrapper">
+    <div class="col-dir">
       <div class="game-section">
-        <div class="highlight-bg border">
+        <div class="highlight-bg glow border">
           <canvas id="canvas" width="1000" height="700"></canvas>
         </div>
       </div>
 
-      <div class="description-section">
-        <div class="description-section smooth-box">
-          <h2 class="centered-content">How To Play</h2>
-          <div class="description-content">
-            In Bricked UP your goal is to destroy <b>ALL</b>
-             of the bricks. You also must <b>NOT</b> lose your balls, or else you will lose 
-             <b>1 HEALTH POINT</b>
-          </div>
-        </div>
-
-        <div class="description-section smooth-box">
-          <div class="description-content">
-            click on the <b>LEVEL EDITOR</b> button below if you want to 
-            make your own levels or change existing levels.
-          </div>
-          <div class="button-container centered-content">
-            <button class="button smooth-box big-text" onclick="toggleEditor()">LEVEL EDITOR</button>
-          </div>
-        </div>
+      <div class="buttons-container centered-content">
+        <button class="button smooth-box big-text" onclick="showHowToPlay()">How To Play?</button>
+        <button class="button smooth-box big-text" onclick="showEditorPrompt()">Level Editor</button>
       </div>
     </div>
   </div>
