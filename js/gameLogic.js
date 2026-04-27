@@ -40,7 +40,7 @@ function init() {
   Globals.gameManager = new GameManager();
   Globals.engine.add(Globals.gameManager);
 
-  loadLevel(0); 
+  loadLevel(0);
 }
 
 function loadAudio() {

@@ -5,6 +5,10 @@ class GameManager extends Node {
     this.bricksCount;
     this._playerHealth = 3;
     this.lifeImages = [];
+    
+    this._score = 0;
+    this.scoreNode = null; // We'll store our text UI node here
+    
     this.currentLevelIndex = 0;
 
     // --- DEV SHORTCUTS ---
@@ -22,28 +26,55 @@ class GameManager extends Node {
 
   ready() {
     this.updateHealthUI();
+    
+    // Spawn the score UI text in the top left corner (adjust Vector2 to move it)
+    this.scoreNode = new ScoreText(new Vector2(20, 20));
+    Globals.engine.add(this.scoreNode, 5);
+    
+    this.updateScoreUI();
   }
 
   set playerHealth(value) {
     this._playerHealth = value;
+
     // Game Over check
     if (this.playerHealth <= 0) {
+      
+      // save the name of the player and their score into local storage
+      inputPrompt(this.score);
+
       this.playerHealth = 3;
+      this.score = 0; // Reset the score for the next run!
       
       Globals.audio.playSFX("game_over", 0.2);
       loadLevel(0);
     }
+
     this.updateHealthUI();
   }
   get playerHealth() {
     return this._playerHealth;
   }
 
+  // --- SCORE LOGIC ---
+  set score(value) {
+    this._score = value;
+    this.updateScoreUI(); // Keep the UI in sync automatically
+  }
+  get score() {
+    return this._score;
+  }
+
+  addScore(points = 0) {
+    // By using 'this.score' instead of 'this._score', it triggers the setter above!
+    this.score += points; 
+  }
+
   updateHealthUI() {
     this.lifeImages.forEach(img => img.queueFree());
     this.lifeImages = [];
 
-    // 2. Spawn new icons matching the exact current playerHealth
+    // Spawn new icons matching the exact current playerHealth
     for (let i = 0; i < this._playerHealth; i++) {
       const xPos = Globals.engine.canvas.width - 40 - (i * 40); 
       const yPos = 20; // 20 pixels from the top
@@ -55,7 +86,14 @@ class GameManager extends Node {
     }
   }
 
-  // "event" receivers
+  updateScoreUI() {
+    // Instead of spawning/destroying nodes, we just update the text string!
+    if (this.scoreNode) {
+      this.scoreNode.text = "SCORE: " + this.score;
+    }
+  }
+
+  // --- "EVENT" RECEIVERS ---
 
   onBrickDestroyed() {
     this.bricksCount--;
@@ -64,22 +102,26 @@ class GameManager extends Node {
       Globals.audio.playSFX("level_cleared", 0.25);
       
       this.currentLevelIndex++;
+      Globals.gameManager.addScore(300);
+
       loadLevel(this.currentLevelIndex);
     }
   }
 
   onBallLost() {
-    this.ballsCount = Globals.balls.length - 1;
+    this.ballsCount--;
     
     // Lose life condition!
     if (this.ballsCount <= 0) {
-      // This will trigger the setter. If health drops to 0, loadLevel(0) runs here.
+      // Save the health BEFORE we subtract from it
+      const previousHealth = this.playerHealth;
+      
+      // This will trigger the setter. If health drops to 0, Game Over logic runs here.
       this.playerHealth--; 
 
-      // ONLY spawn a new ball if the player actually survived the health drop!
-      // If health is 0 (or was reset to 3 by the game over), we skip this 
-      // because loadLevel already gave us a new ball.
-      if (this.playerHealth > 0 && this.playerHealth < 3) {
+      // If the player had more than 1 health BEFORE losing a life, they survived.
+      // This totally removes the `< 3` limitation so you can have 100 health if you want!
+      if (previousHealth > 1) {
         Globals.balls = [
           Object.assign(
             new Ball(Globals.paddle.position.clone(), 0, new Vector2(0, -1), 500, 20),
@@ -87,16 +129,15 @@ class GameManager extends Node {
           )
         ];
         Globals.engine.add(Globals.balls[0], 3);
+        
+        // Let the manager know we have exactly 1 ball alive now
+        this.ballsCount = 1;
       }
     }
   }
 
   onBallAdded() {
     this.ballsCount++;
-  }
-
-  process(delta) {
-    
   }
 }
 
@@ -105,6 +146,24 @@ class LifeImg extends Node2D {
     super(position, 0);
 
     this.renderer = new Sprite2D(this, "images/icon/life.png", 30, 5)
+  }
+}
+
+class ScoreText extends Node2D {
+  constructor(position = new Vector2()) {
+    super(position, 0);
+    this.text = "SCORE: 0";
+    
+    // Create a CanvasItem that draws our text string
+    this.renderer = new CanvasItem(this, (ctx) => {
+      ctx.fillStyle = "#ffffff"; // Make it white
+      ctx.font = "bold 24px Arial"; // Set size and font
+      ctx.textAlign = "left";
+      ctx.textBaseline = "top";
+      
+      // Draw the text at (0, 0) relative to this node's position
+      ctx.fillText(this.text, 0, 0); 
+    });
   }
 }
 
@@ -185,24 +244,41 @@ class Item extends Node2D {
           ball.speed += data.value;
         });
 
-        if (data.value > 0) Globals.audio.playSFX("item_debuff", 1.0);
-        else Globals.audio.playSFX("item_buff", 0.1);
+        if (data.value > 0) {
+          Globals.audio.playSFX("item_debuff", 1.0);
+          Globals.gameManager.addScore(20);
+        }
+        else {
+          Globals.audio.playSFX("item_buff", 0.1);
+          Globals.gameManager.addScore(15);
+        }
 
         break;
 
       case "width":
         Globals.paddle.width += data.value;
 
-        if (data.value < 0) Globals.audio.playSFX("item_debuff", 1.0);
-        else Globals.audio.playSFX("item_buff", 0.1);
+        if (data.value < 0) {
+          Globals.audio.playSFX("item_debuff", 1.0);
+          Globals.gameManager.addScore(15);
+        }
+        else {
+          Globals.audio.playSFX("item_buff", 0.1);
+          Globals.gameManager.addScore(25);
+        }
 
         break;
 
       case "fireball":
         this.ballRefRef.isFireball = data.value;
 
-        if (data.value == false) Globals.audio.playSFX("item_debuff", 1.0);
-        else Globals.audio.playSFX("item_buff", 0.1);
+        if (data.value == false) {
+          Globals.audio.playSFX("item_debuff", 1.0);
+        }
+        else {
+          Globals.audio.playSFX("item_buff", 0.1);
+          Globals.gameManager.addScore(30);
+        }
 
         break;
 
@@ -217,8 +293,9 @@ class Item extends Node2D {
 
           Globals.balls.push(newBall);
           Globals.engine.add(newBall, 3);
-
+          
           Globals.audio.playSFX("item_buff", 0.1);
+          Globals.gameManager.addScore(40);
         }
 
         break;
@@ -226,13 +303,20 @@ class Item extends Node2D {
         Globals.paddle.isMagnetic = data.value;
 
         Globals.audio.playSFX("item_buff", 0.1);
+        Globals.gameManager.addScore(35);
         break;
 
       case "health":
         Globals.gameManager.playerHealth += data.value;
 
-        if (data.value > 0) Globals.audio.playSFX("item_buff", 0.1);
-        else Globals.audio.playSFX("item_debuff", 1.0);
+        if (data.value > 0) {
+          Globals.audio.playSFX("item_buff", 0.1);
+          Globals.gameManager.addScore(50);
+        }
+        else {
+          Globals.audio.playSFX("item_debuff", 1.0);
+          Globals.gameManager.addScore(60);
+        }
 
         break;
     }
@@ -574,6 +658,7 @@ class Brick extends Entity2D {
   }
 
   dieAndUpdate() {
+    Globals.gameManager.addScore(10);
     Globals.gameManager.onBrickDestroyed(); 
     this.queueFree();
   }
